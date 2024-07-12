@@ -29,7 +29,7 @@ pub use descriptor::Descriptor;
 // - require zerocopy for T in enqueue and dequeue?
 // - variable length descriptor array?
 
-pub const RING_BUFFER_SIZE: usize = 512;
+pub const RING_BUFFER_SIZE: usize = 128;
 
 #[derive(Debug, Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Hash)]
 pub struct PeerMisbehaviorError(());

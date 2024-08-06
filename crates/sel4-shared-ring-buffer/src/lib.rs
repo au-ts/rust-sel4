@@ -29,7 +29,7 @@ pub use descriptor::Descriptor;
 // - require zerocopy for T in enqueue and dequeue?
 // - variable length descriptor array?
 
-pub const RING_BUFFER_SIZE: usize = 64;
+// pub const RING_BUFFER_SIZE: usize = 64;
 
 #[derive(Debug, Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Hash)]
 pub struct PeerMisbehaviorError(());
@@ -40,24 +40,26 @@ impl PeerMisbehaviorError {
     }
 }
 
-pub struct RingBuffers<'a, R: RingBuffersRole, F, T: Descriptor> {
-    free: RingBuffer<'a, R::FreeRole, T>,
-    used: RingBuffer<'a, R::UsedRole, T>,
+pub struct RingBuffers<'a, R: RingBuffersRole, F, T: Descriptor, const SIZE: usize> {
+    free: RingBuffer<'a, R::FreeRole, T, SIZE>,
+    used: RingBuffer<'a, R::UsedRole, T, SIZE>,
     notify: F,
 }
 
-impl<'a, R: RingBuffersRole, F, T: Copy + Descriptor> RingBuffers<'a, R, F, T> {
+impl<'a, R: RingBuffersRole, F, T: Copy + Descriptor, const SIZE: usize>
+    RingBuffers<'a, R, F, T, SIZE>
+{
     pub fn new(
-        free: RingBuffer<'a, R::FreeRole, T>,
-        used: RingBuffer<'a, R::UsedRole, T>,
+        free: RingBuffer<'a, R::FreeRole, T, SIZE>,
+        used: RingBuffer<'a, R::UsedRole, T, SIZE>,
         notify: F,
     ) -> Self {
         Self { free, used, notify }
     }
 
     pub fn from_ptrs_using_default_initialization_strategy_for_role(
-        free: ExternallySharedRef<'a, RawRingBuffer<T>>,
-        used: ExternallySharedRef<'a, RawRingBuffer<T>>,
+        free: ExternallySharedRef<'a, RawRingBuffer<T, SIZE>>,
+        used: ExternallySharedRef<'a, RawRingBuffer<T, SIZE>>,
         notify: F,
     ) -> Self {
         let initialization_strategy = R::default_initialization_strategy();
@@ -68,30 +70,34 @@ impl<'a, R: RingBuffersRole, F, T: Copy + Descriptor> RingBuffers<'a, R, F, T> {
         )
     }
 
-    pub fn free(&self) -> &RingBuffer<'a, R::FreeRole, T> {
+    pub fn free(&self) -> &RingBuffer<'a, R::FreeRole, T, SIZE> {
         &self.free
     }
 
-    pub fn used(&self) -> &RingBuffer<'a, R::UsedRole, T> {
+    pub fn used(&self) -> &RingBuffer<'a, R::UsedRole, T, SIZE> {
         &self.used
     }
 
-    pub fn free_mut(&mut self) -> &mut RingBuffer<'a, R::FreeRole, T> {
+    pub fn free_mut(&mut self) -> &mut RingBuffer<'a, R::FreeRole, T, SIZE> {
         &mut self.free
     }
 
-    pub fn used_mut(&mut self) -> &mut RingBuffer<'a, R::UsedRole, T> {
+    pub fn used_mut(&mut self) -> &mut RingBuffer<'a, R::UsedRole, T, SIZE> {
         &mut self.used
     }
 }
 
-impl<'a, U, R: RingBuffersRole, F: Fn() -> U, T: Descriptor> RingBuffers<'a, R, F, T> {
+impl<'a, U, R: RingBuffersRole, F: Fn() -> U, T: Descriptor, const SIZE: usize>
+    RingBuffers<'a, R, F, T, SIZE>
+{
     pub fn notify(&self) -> U {
         (self.notify)()
     }
 }
 
-impl<'a, U, R: RingBuffersRole, F: FnMut() -> U, T: Descriptor> RingBuffers<'a, R, F, T> {
+impl<'a, U, R: RingBuffersRole, F: FnMut() -> U, T: Descriptor, const SIZE: usize>
+    RingBuffers<'a, R, F, T, SIZE>
+{
     pub fn notify_mut(&mut self) -> U {
         (self.notify)()
     }
@@ -99,24 +105,23 @@ impl<'a, U, R: RingBuffersRole, F: FnMut() -> U, T: Descriptor> RingBuffers<'a, 
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
-pub struct RawRingBuffer<T: Descriptor> {
-    pub write_index: u32,
-    pub read_index: u32,
-    pub descriptors: [T; RING_BUFFER_SIZE],
+pub struct RawRingBuffer<T: Descriptor, const SIZE: usize> {
+    pub write_index: u16,
+    pub read_index: u16,
+    pub consumer_signalled: u32,
+    pub descriptors: [T; SIZE],
 }
 
-pub struct RingBuffer<'a, R: RingBufferRole, T: Descriptor> {
-    inner: ExternallySharedRef<'a, RawRingBuffer<T>>,
-    stored_write_index: Wrapping<u32>,
-    stored_read_index: Wrapping<u32>,
+pub struct RingBuffer<'a, R: RingBufferRole, T: Descriptor, const SIZE: usize> {
+    inner: ExternallySharedRef<'a, RawRingBuffer<T, SIZE>>,
+    stored_write_index: Wrapping<u16>,
+    stored_read_index: Wrapping<u16>,
     _phantom: PhantomData<R>,
 }
 
-impl<'a, R: RingBufferRole, T: Copy + Descriptor> RingBuffer<'a, R, T> {
-    const SIZE: usize = RING_BUFFER_SIZE;
-
+impl<'a, R: RingBufferRole, T: Copy + Descriptor, const SIZE: usize> RingBuffer<'a, R, T, SIZE> {
     pub fn new(
-        ptr: ExternallySharedRef<'a, RawRingBuffer<T>>,
+        ptr: ExternallySharedRef<'a, RawRingBuffer<T, SIZE>>,
         initialization_strategy: InitializationStrategy,
     ) -> Self {
         let mut inner = ptr;
@@ -149,20 +154,20 @@ impl<'a, R: RingBufferRole, T: Copy + Descriptor> RingBuffer<'a, R, T> {
     }
 
     pub const fn capacity(&self) -> usize {
-        Self::SIZE - 1
+        SIZE - 1
     }
 
-    fn write_index(&mut self) -> ExternallySharedPtr<'_, u32> {
+    fn write_index(&mut self) -> ExternallySharedPtr<'_, u16> {
         let ptr = self.inner.as_mut_ptr();
         map_field!(ptr.write_index)
     }
 
-    fn read_index(&mut self) -> ExternallySharedPtr<'_, u32> {
+    fn read_index(&mut self) -> ExternallySharedPtr<'_, u16> {
         let ptr = self.inner.as_mut_ptr();
         map_field!(ptr.read_index)
     }
 
-    fn descriptor(&mut self, index: Wrapping<u32>) -> ExternallySharedPtr<'_, T> {
+    fn descriptor(&mut self, index: Wrapping<u16>) -> ExternallySharedPtr<'_, T> {
         let residue = self.residue(index);
         let ptr = self.inner.as_mut_ptr();
         map_field!(ptr.descriptors).as_slice().index(residue)
@@ -214,12 +219,14 @@ impl<'a, R: RingBufferRole, T: Copy + Descriptor> RingBuffer<'a, R, T> {
         Ok(self.num_empty_slots()? == 0)
     }
 
-    fn residue(&self, index: Wrapping<u32>) -> usize {
-        usize::try_from(index.0).unwrap() % Self::SIZE
+    fn residue(&self, index: Wrapping<u16>) -> usize {
+        usize::try_from(index.0).unwrap() % SIZE
     }
 }
 
-impl<'a, T: Copy + FromBytes + AsBytes + Descriptor> RingBuffer<'a, Write, T> {
+impl<'a, T: Copy + FromBytes + AsBytes + Descriptor, const SIZE: usize>
+    RingBuffer<'a, Write, T, SIZE>
+{
     pub fn enqueue_and_commit(&mut self, desc: T) -> Result<Result<(), T>, PeerMisbehaviorError> {
         self.enqueue(desc, true)
     }
@@ -263,7 +270,9 @@ impl<'a, T: Copy + FromBytes + AsBytes + Descriptor> RingBuffer<'a, Write, T> {
     }
 }
 
-impl<'a, T: Copy + FromBytes + AsBytes + Descriptor> RingBuffer<'a, Read, T> {
+impl<'a, T: Copy + FromBytes + AsBytes + Descriptor, const SIZE: usize>
+    RingBuffer<'a, Read, T, SIZE>
+{
     pub fn dequeue(&mut self) -> Result<Option<T>, PeerMisbehaviorError> {
         if self.is_empty()? {
             return Ok(None);
@@ -301,12 +310,12 @@ impl Default for InitializationStrategy {
 
 #[derive(Debug, Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Hash, Default)]
 pub struct InitialState {
-    write_index: u32,
-    read_index: u32,
+    write_index: u16,
+    read_index: u16,
 }
 
 impl InitialState {
-    pub fn new(write_index: u32, read_index: u32) -> Self {
+    pub fn new(write_index: u16, read_index: u16) -> Self {
         Self {
             write_index,
             read_index,

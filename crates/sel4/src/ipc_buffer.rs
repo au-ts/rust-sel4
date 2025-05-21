@@ -47,7 +47,7 @@ pub struct MyVolatileRef<'a, X, Y>
 where
     X: ?Sized(VolatileRef<'a, X, Y>);
 
-impl MyVolatileRef<'a, X, Y>
+impl<'a, X> MyVolatileRef<'a, X, Y>
 where
     X: ?Sized,
 {

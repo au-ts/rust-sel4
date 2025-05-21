@@ -7,6 +7,7 @@
 
 use core::mem;
 use core::slice;
+use volatile::VolatileRef;
 
 #[sel4_cfg(KERNEL_INVOCATION_REPORT_ERROR_IPC)]
 use core::str::{self, Utf8Error};

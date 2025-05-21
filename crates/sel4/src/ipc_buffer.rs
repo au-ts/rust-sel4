@@ -27,7 +27,7 @@ use crate::const_helpers::u32_into_usize;
 #[repr(transparent)]
 pub struct IpcBuffer(sys::seL4_IPCBuffer);
 
-impl Index<usize> for VolatileRef<'a, [Word], _> {
+impl<'a> Index<usize> for VolatileRef<'a, [Word], _> {
     type Output = VolatileRef<'a, Word, ReadOnly>;
 
     fn index(&self, idx: usize) -> &Self::Output {
@@ -35,7 +35,7 @@ impl Index<usize> for VolatileRef<'a, [Word], _> {
     }
 }
 
-impl IndexMut<usize> for VolatileRef<'a, [Word], _> {
+impl<'a> IndexMut<usize> for VolatileRef<'a, [Word], _> {
     type Output = VolatileRef<'a, Word, ReadOnly>;
 
     fn index_mut(&self, idx: usize) -> &Self::Output {

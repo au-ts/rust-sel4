@@ -43,11 +43,11 @@ impl<'a> IndexMut<usize> for MyVolatileRef<'a, [Word], ReadWrite> {
     }
 }
 
-pub struct MyVolatileRef<'_, X, Y>
+pub struct MyVolatileRef<'a, X, Y>
 where
-    X: ?Sized(VolatileRef<'_, X, Y>);
+    X: ?Sized(VolatileRef<'a, X, Y>);
 
-impl MyVolatileRef<'_, X, Y>
+impl MyVolatileRef<'a, X, Y>
 where
     X: ?Sized,
 {

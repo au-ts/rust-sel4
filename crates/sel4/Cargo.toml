@@ -31,3 +31,4 @@ tls = []
 cfg-if = "1.0.0"
 sel4-config = { path = "config" }
 sel4-sys = { path = "sys" }
+volatile = "0.6.1"

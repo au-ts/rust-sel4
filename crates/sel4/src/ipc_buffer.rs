@@ -11,6 +11,9 @@ use core::slice;
 #[sel4_cfg(KERNEL_INVOCATION_REPORT_ERROR_IPC)]
 use core::str::{self, Utf8Error};
 
+use volatile::access::ReadOnly;
+use volatile::access::ReadWrite;
+
 use crate::{cap, newtype_methods, sel4_cfg, sys, AbsoluteCPtr, Word};
 
 #[sel4_cfg(KERNEL_INVOCATION_REPORT_ERROR_IPC)]
@@ -24,12 +27,12 @@ pub struct IpcBuffer(sys::seL4_IPCBuffer);
 impl IpcBuffer {
     newtype_methods!(pub sys::seL4_IPCBuffer);
 
-    pub fn msg_regs(&self) -> &[Word] {
-        &self.inner().msg[..]
+    pub fn msg_regs(&self) -> VolatileRef<'_, [Word], ReadOnly> {
+        VolatileRef::from_ref(&self.inner().msg[..])
     }
 
-    pub fn msg_regs_mut(&mut self) -> &mut [Word] {
-        &mut self.inner_mut().msg[..]
+    pub fn msg_regs_mut(&mut self) -> VolatileRef<'_, [Word], ReadWrite> {
+        VolatileRef::from_mut_ref(&mut self.inner_mut().msg[..])
     }
 
     pub fn msg_bytes(&self) -> &[u8] {

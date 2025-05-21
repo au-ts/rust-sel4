@@ -43,15 +43,20 @@ impl<'a> IndexMut<usize> for MyVolatileRef<'a, [Word], ReadWrite> {
     }
 }
 
-pub struct MyVolatileRef<'_, X, Y>(VolatileRef<'_, X, Y>);
+pub struct MyVolatileRef<'_, X, Y>
+where
+    X: ?Sized(VolatileRef<'_, X, Y>);
 
-impl MyVolatileRef<'_, X: Sized, Y> {
+impl MyVolatileRef<'_, X, Y>
+where
+    X: ?Sized,
+{
     pub fn from_ref(reference: &'a X) -> MyVolatileRef<'a, X, ReadOnly> {
-        return VolatileRef::from_ref(reference);
+        MyVolatileRef(VolatileRef::from_ref(reference));
     }
 
     pub fn from_mut_ref(reference: &'a mut X) -> MyVolatileRef<'a, X, ReadWrite> {
-        return VolatileRef::from_mut_ref(reference);
+        MyVolatileRef(VolatileRef::from_mut_ref(reference));
     }
 }
 

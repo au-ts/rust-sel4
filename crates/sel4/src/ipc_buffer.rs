@@ -6,7 +6,9 @@
 //
 
 use core::mem;
+use core::ops::IndexMut;
 use core::slice;
+use volatile::VolatilePtr;
 use volatile::VolatileRef;
 
 #[sel4_cfg(KERNEL_INVOCATION_REPORT_ERROR_IPC)]
@@ -24,6 +26,22 @@ use crate::const_helpers::u32_into_usize;
 #[derive(Default)]
 #[repr(transparent)]
 pub struct IpcBuffer(sys::seL4_IPCBuffer);
+
+impl Index<usize> for VolatileRef<'_, [Word], _> {
+    type Output = VolatileRef<'_, Word, ReadOnly>;
+
+    fn index(&self, idx: usize) -> &Self::Output {
+        return VolatileRef::new(self.as_ptr().add(idx));
+    }
+}
+
+impl IndexMut<usize> for VolatileRef<_, [Word], _> {
+    type Output = VolatileRef<'_, Word, ReadOnly>;
+
+    fn index(&self, idx: usize) -> &Self::Output {
+        return VolatileRef::new(self.as_ptr().add(idx));
+    }
+}
 
 impl IpcBuffer {
     newtype_methods!(pub sys::seL4_IPCBuffer);

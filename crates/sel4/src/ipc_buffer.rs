@@ -27,7 +27,7 @@ use crate::const_helpers::u32_into_usize;
 #[repr(transparent)]
 pub struct IpcBuffer(sys::seL4_IPCBuffer);
 
-impl<'a> Index<usize> for VolatileRef<'a, [Word], ReadOnly> {
+impl<'a> Index<usize> for MyVolatileRef<'a, [Word], ReadOnly> {
     type Output = VolatileRef<'a, Word, ReadOnly>;
 
     fn index(&self, idx: usize) -> &Self::Output {
@@ -35,7 +35,7 @@ impl<'a> Index<usize> for VolatileRef<'a, [Word], ReadOnly> {
     }
 }
 
-impl<'a> IndexMut<usize> for VolatileRef<'a, [Word], ReadWrite> {
+impl<'a> IndexMut<usize> for MyVolatileRef<'a, [Word], ReadWrite> {
     // type Output = VolatileRef<'a, Word, ReadOnly>;
 
     fn index_mut(&self, idx: usize) -> &Self::Output {
@@ -43,15 +43,27 @@ impl<'a> IndexMut<usize> for VolatileRef<'a, [Word], ReadWrite> {
     }
 }
 
+pub struct MyVolatileRef<'_, X, Y>(VolatileRef<'_, X, Y>);
+
+impl MyVolatileRef<'_, X: Sized, Y> {
+    pub fn from_ref(reference: &'a X) -> MyVolatileRef<'a, X, ReadOnly> {
+        return VolatileRef::from_ref(reference);
+    }
+
+    pub fn from_mut_ref(reference: &'a mut X) -> MyVolatileRef<'a, X, ReadWrite> {
+        return VolatileRef::from_mut_ref(reference);
+    }
+}
+
 impl IpcBuffer {
     newtype_methods!(pub sys::seL4_IPCBuffer);
 
     pub fn msg_regs(&self) -> VolatileRef<'_, [Word], ReadOnly> {
-        VolatileRef::from_ref(&self.inner().msg[..])
+        MyVolatileRef::from_ref(&self.inner().msg[..])
     }
 
     pub fn msg_regs_mut(&mut self) -> VolatileRef<'_, [Word], ReadWrite> {
-        VolatileRef::from_mut_ref(&mut self.inner_mut().msg[..])
+        MyVolatileRef::from_mut_ref(&mut self.inner_mut().msg[..])
     }
 
     pub fn msg_bytes(&self) -> &[u8] {

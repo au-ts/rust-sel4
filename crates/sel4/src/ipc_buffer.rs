@@ -6,7 +6,7 @@
 //
 
 use core::mem;
-use core::ops::IndexMut;
+use core::ops::{Index, IndexMut};
 use core::slice;
 use volatile::VolatilePtr;
 use volatile::VolatileRef;
@@ -27,18 +27,18 @@ use crate::const_helpers::u32_into_usize;
 #[repr(transparent)]
 pub struct IpcBuffer(sys::seL4_IPCBuffer);
 
-impl Index<usize> for VolatileRef<'_, [Word], _> {
-    type Output = VolatileRef<'_, Word, ReadOnly>;
+impl Index<usize> for VolatileRef<'a, [Word], _> {
+    type Output = VolatileRef<'a, Word, ReadOnly>;
 
     fn index(&self, idx: usize) -> &Self::Output {
         return VolatileRef::new(self.as_ptr().add(idx));
     }
 }
 
-impl IndexMut<usize> for VolatileRef<_, [Word], _> {
-    type Output = VolatileRef<'_, Word, ReadOnly>;
+impl IndexMut<usize> for VolatileRef<'a, [Word], _> {
+    type Output = VolatileRef<'a, Word, ReadOnly>;
 
-    fn index(&self, idx: usize) -> &Self::Output {
+    fn index_mut(&self, idx: usize) -> &Self::Output {
         return VolatileRef::new(self.as_ptr().add(idx));
     }
 }

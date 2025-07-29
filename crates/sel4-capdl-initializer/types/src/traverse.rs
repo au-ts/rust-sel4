@@ -33,10 +33,10 @@ impl<'a, N, D, M> Spec<'a, N, D, M> {
                             Object::Irq(obj) => Object::Irq(obj.clone()),
                             Object::VCpu => Object::VCpu,
                             Object::Frame(obj) => Object::Frame(object::Frame {
-                                size_bits: obj.size_bits,
-                                paddr: obj.paddr,
-                                init: g(obj, self.root_objects.contains(&obj_id))?,
-                            }),
+                                                        size_bits: obj.size_bits,
+                                                        paddr: obj.paddr,
+                                                        init: g(obj, self.root_objects.contains(&obj_id))?,
+                                                    }),
                             Object::PageTable(obj) => Object::PageTable(obj.clone()),
                             Object::AsidPool(obj) => Object::AsidPool(obj.clone()),
                             Object::ArmIrq(obj) => Object::ArmIrq(obj.clone()),
@@ -45,6 +45,7 @@ impl<'a, N, D, M> Spec<'a, N, D, M> {
                             Object::IOPorts(obj) => Object::IOPorts(obj.clone()),
                             Object::SchedContext(obj) => Object::SchedContext(obj.clone()),
                             Object::Reply => Object::Reply,
+                            Object::ArmSmc => Object::ArmSmc,
                         },
                     })
                 })

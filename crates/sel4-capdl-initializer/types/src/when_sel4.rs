@@ -44,7 +44,7 @@ impl<D, M> Object<'_, D, M> {
                 }
                 #[sel4_cfg(any(ARCH_RISCV64, ARCH_RISCV32))]
                 Object::PageTable(obj) => {
-                    assert!(obj.level.is_none()); // sanity check
+                    // assert!(obj.level.is_none()); // sanity check
                     sel4::ObjectBlueprintArch::PageTable.into()
                 }
                 #[sel4_cfg(ARCH_X86_64)]

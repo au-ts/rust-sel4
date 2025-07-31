@@ -6,7 +6,7 @@
 
 use crate::{
     cap::*, cap_type, AbsoluteCPtr, Cap, CapRights, CapTypeForFrameObject, Error,
-    InvocationContext, Result, TranslationTableObjectType, VmAttributes,
+    InvocationContext, Result, TranslationTableObjectType, VmAttributes, Word,
 };
 
 impl<T: CapTypeForFrameObject, C: InvocationContext> Cap<T, C> {
@@ -103,6 +103,27 @@ impl<C: InvocationContext> AsidPool<C> {
             ipc_buffer
                 .inner_mut()
                 .seL4_RISCV_ASIDPool_Assign(cptr.bits(), vspace.bits())
+        }))
+    }
+}
+
+impl<C: InvocationContext> IrqControl<C> {
+    /// Corresponds to `seL4_IRQControl_GetTrigger`.
+    pub fn irq_control_get_trigger(
+        self,
+        irq: Word,
+        edge_triggered: bool,
+        dst: &AbsoluteCPtr,
+    ) -> Result<()> {
+        Error::wrap(self.invoke(|cptr, ipc_buffer| {
+            ipc_buffer.inner_mut().seL4_IRQControl_GetTrigger(
+                cptr.bits(),
+                irq,
+                edge_triggered.into(),
+                dst.root().bits(),
+                dst.path().bits(),
+                dst.path().depth_for_kernel(),
+            )
         }))
     }
 }

@@ -48,6 +48,7 @@ pub struct Initializer<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B> {
     cslot_allocator: &'a mut CSlotAllocator,
     buffers: &'a mut InitializerBuffers<B>,
     system_cap_mask: Option<usize>,
+    root_cnode_slot: Slot<sel4::cap_type::CNode>,
 }
 
 impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObjectBuffer]>>
@@ -76,6 +77,7 @@ impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObject
             cslot_allocator: &mut cslot_allocator,
             buffers,
             system_cap_mask: None,
+            root_cnode_slot: init_thread::slot::CNODE,
         }
         .run()
         .unwrap_or_else(|err| panic!("Error: {}", err));
@@ -142,7 +144,7 @@ impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObject
         //          /         \
         //  Initial CNode     System CNode
         // @billn fix this hardcoded value.
-        if self.spec_with_sources.spec.objects.len() > 8 {
+        if self.spec_with_sources.spec.objects.len() > 999999 {
             trace!("Bootstrapping a larger CSpace");
 
             let empty_cte: [CapTableEntry; 0] = [];
@@ -277,7 +279,6 @@ impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObject
         }
 
         // Index root objects
-
         let first_obj_without_paddr = self
             .spec()
             .root_objects()
@@ -841,9 +842,9 @@ impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObject
                                 if badge == 0 && rights == CapRights::all() {
                                     orig
                                 } else {
-                                    let src = init_thread::slot::CNODE.cap().absolute_cptr(orig);
+                                    let src = self.root_cnode_slot.cap().absolute_cptr(orig);
                                     let new = self.cslot_alloc_or_panic().cap();
-                                    let dst = init_thread::slot::CNODE.cap().absolute_cptr(new);
+                                    let dst = self.root_cnode_slot.cap().absolute_cptr(new);
                                     dst.mint(&src, rights, badge)?;
                                     new.cast()
                                 }
@@ -923,7 +924,8 @@ impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObject
             for (i, cap) in obj.slots() {
                 let badge = cap.badge();
                 let rights = cap.rights().map(From::from).unwrap_or(CapRights::all());
-                let src = init_thread::slot::CNODE
+                let src = self
+                    .root_cnode_slot
                     .cap()
                     .absolute_cptr(self.orig_cap::<cap_type::Unspecified>(cap.obj()));
                 let dst = cnode
@@ -952,7 +954,7 @@ impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObject
 
     fn copy<U: sel4::CapType>(&mut self, cap: sel4::Cap<U>) -> Result<sel4::Cap<U>> {
         let slot = self.cslot_alloc_or_panic();
-        let src = init_thread::slot::CNODE.cap().absolute_cptr(cap);
+        let src = self.root_cnode_slot.cap().absolute_cptr(cap);
         cslot_to_absolute_cptr(slot).copy(&src, CapRights::all())?;
         Ok(slot.cap().downcast())
     }

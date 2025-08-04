@@ -801,9 +801,19 @@ impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObject
                 tcb.tcb_bind_notification(bound_notification)?;
             }
 
+            // @billn / @ivanv: fix this macro thing
             sel4::sel4_cfg_if! {
                 if #[sel4_cfg(all(ARCH_AARCH64, ARM_HYPERVISOR_SUPPORT))] {
                     if let Some(vcpu) = obj.vcpu() {
+                        let vcpu = self.orig_cap::<cap_type::VCpu>(vcpu.object);
+                        vcpu.vcpu_set_tcb(tcb)?;
+                    }
+                }
+            }
+            sel4::sel4_cfg_if! {
+                if #[sel4_cfg(all(ARCH_X86_64, VTX))] {
+                    if let Some(vcpu) = obj.vcpu() {
+                        let named_obj = &self.spec().named_object(obj_id);
                         let vcpu = self.orig_cap::<cap_type::VCpu>(vcpu.object);
                         vcpu.vcpu_set_tcb(tcb)?;
                     }

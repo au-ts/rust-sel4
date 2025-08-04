@@ -21,7 +21,10 @@ impl<D, M> Object<'_, D, M> {
                     size_bits: obj.size_bits,
                 },
                 Object::Tcb(_) => ObjectBlueprint::Tcb,
+                // @billn / @ivanv: fix this macro thing
                 #[sel4_cfg(all(ARCH_AARCH64, ARM_HYPERVISOR_SUPPORT))]
+                Object::VCpu => sel4::ObjectBlueprintArch::VCpu.into(),
+                #[sel4_cfg(all(ARCH_X86_64, VTX))]
                 Object::VCpu => sel4::ObjectBlueprintArch::VCpu.into(),
                 Object::Frame(obj) => sel4::FrameObjectType::from_bits(obj.size_bits).unwrap().blueprint(),
                 #[sel4_cfg(ARCH_AARCH64)]

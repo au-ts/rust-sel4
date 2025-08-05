@@ -15,7 +15,6 @@ use core::slice;
 #[allow(unused_imports)]
 use log::{debug, info, trace};
 
-use sel4::CNodeCapData;
 use sel4::{
     cap_type,
     init_thread::{self, Slot},
@@ -47,8 +46,6 @@ pub struct Initializer<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B> {
     spec_with_sources: &'a SpecWithSources<'a, N, D, M>,
     cslot_allocator: &'a mut CSlotAllocator,
     buffers: &'a mut InitializerBuffers<B>,
-    system_cap_mask: Option<usize>,
-    root_cnode_slot: Slot<sel4::cap_type::CNode>,
 }
 
 impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObjectBuffer]>>
@@ -64,10 +61,7 @@ impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObject
 
         let copy_addrs = CopyAddrs::init(bootinfo, &user_image_bounds).unwrap();
 
-        let mut range = bootinfo.empty().range();
-        // @billn properly calculate this
-        range.end *= 8;
-        let mut cslot_allocator = CSlotAllocator::new(range);
+        let mut cslot_allocator = CSlotAllocator::new(bootinfo.empty().range());
 
         Initializer {
             bootinfo,
@@ -76,8 +70,6 @@ impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObject
             spec_with_sources,
             cslot_allocator: &mut cslot_allocator,
             buffers,
-            system_cap_mask: None,
-            root_cnode_slot: init_thread::slot::CNODE,
         }
         .run()
         .unwrap_or_else(|err| panic!("Error: {}", err));
@@ -135,148 +127,6 @@ impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObject
             arr.sort_unstable_by_key(|i| uts[*i].paddr());
             arr
         };
-
-        // // If the number of caps required exceeds the small initial task's CNode, create a larger one,
-        // // in a way such that both CNodes are addressible. Like this:
-        // //          Root CNode
-        // //            /     \
-        // //           /       \
-        // //          /         \
-        // //  Initial CNode     System CNode
-        // // @billn fix this hardcoded value.
-        // if self.spec_with_sources.spec.objects.len() > 999999 {
-        //     trace!("Bootstrapping a larger CSpace");
-
-        //     let empty_cte: [CapTableEntry; 0] = [];
-
-        //     let root_cnode_bits = 1;
-        //     // @billn compute this value on the fly based on spec
-        //     let system_cnode_bits = 15;
-        //     let root_cnode_blueprint = Object::<D, M>::CNode(object::CNode {
-        //         size_bits: root_cnode_bits,
-        //         slots: Indirect::from_borrowed(&empty_cte),
-        //     })
-        //     .blueprint()
-        //     .unwrap();
-        //     let system_cnode_blueprint = Object::<D, M>::CNode(object::CNode {
-        //         size_bits: system_cnode_bits,
-        //         slots: Indirect::from_borrowed(&empty_cte),
-        //     })
-        //     .blueprint()
-        //     .unwrap();
-
-        //     let required_size_bits = root_cnode_blueprint.physical_size_bits()
-        //         + system_cnode_blueprint.physical_size_bits();
-
-        //     // Find the first non-device untyped that would fit both
-        //     // @billn improvement: either get the smallest that would fit and remove it from the list,
-        //     // OR find a way to propagate the watermark information to the later code somehow.
-        //     for i_ut in uts_by_paddr.iter() {
-        //         let ut = &uts[*i_ut];
-        //         let ut_size_bits = ut.size_bits();
-        //         let ut_size_bytes = 1 << ut_size_bits;
-        //         let ut_paddr_start = ut.paddr();
-        //         let ut_paddr_end = ut_paddr_start + ut_size_bytes;
-
-        //         if !ut.is_device() && ut_size_bits >= required_size_bits {
-        //             trace!(
-        //                 "Allocating from untyped: {:#x}..{:#x} (size_bits = {}, device = {:?})",
-        //                 ut_paddr_start,
-        //                 ut_paddr_end,
-        //                 ut_size_bits,
-        //                 ut.is_device()
-        //             );
-        //             // First create the small root CNode.
-        //             let root_cnode_cap: sel4::Cap<sel4::cap_type::CNode> = {
-        //                 let root_cnode_slot = self.cslot_alloc_or_panic();
-        //                 let cap = root_cnode_slot.cap();
-        //                 self.ut_cap(*i_ut)
-        //                     .untyped_retype(
-        //                         &root_cnode_blueprint,
-        //                         &init_thread_cnode_absolute_cptr(),
-        //                         root_cnode_slot.index(),
-        //                         1,
-        //                     )
-        //                     .unwrap();
-        //                 cap.cast()
-        //             };
-
-        //             // Bind the initial CNode into slot zero of the root CNode.
-        //             // It uses sufficient guard bits to ensure it is completely padded to word size.
-        //             // guard size is the lower bit of the guard, upper bits are the guard itself
-        //             // which for out purposes is always zero.
-        //             {
-        //                 let guard = sel4::sel4_cfg_usize!(WORD_SIZE)
-        //                     - root_cnode_bits
-        //                     - sel4::sel4_cfg_usize!(ROOT_CNODE_SIZE_BITS);
-        //                 let source = init_thread::slot::CNODE
-        //                     .cap()
-        //                     .absolute_cptr_from_bits_with_depth(
-        //                         init_thread::slot::CNODE.cptr_bits(),
-        //                         sel4::sel4_cfg_usize!(WORD_SIZE),
-        //                     );
-        //                 let dest =
-        //                     root_cnode_cap.absolute_cptr_from_bits_with_depth(0, root_cnode_bits);
-
-        //                 dest.mint(&source, CapRights::all(), guard.try_into().unwrap())
-        //                     .unwrap();
-        //             };
-
-        //             // Switch the initialiser's initial CNode to the root CNode.
-        //             {
-        //                 init_thread::slot::TCB
-        //                     .cap()
-        //                     .tcb_set_space(
-        //                         init_thread::slot::NULL.cptr(),
-        //                         root_cnode_cap,
-        //                         CNodeCapData::new(0, 0),
-        //                         init_thread::slot::VSPACE.cap(),
-        //                     )
-        //                     .unwrap();
-        //             }
-
-        //             // Create the system CNode, this is where all of the spec's objects
-        //             // will be created to avoid exhausting the small initial CNode.
-        //             // We place it into a temporary space in the initial CNode.
-        //             let system_cnode_cap = {
-        //                 let system_cnode_slot = self.cslot_alloc_or_panic();
-        //                 let cap = system_cnode_slot.cap();
-        //                 let dst = init_thread::slot::CNODE;
-        //                 self.ut_cap(*i_ut)
-        //                     .untyped_retype(
-        //                         &system_cnode_blueprint,
-        //                         &dst.cap().absolute_cptr_for_self(),
-        //                         system_cnode_slot.index(),
-        //                         1,
-        //                     )
-        //                     .unwrap();
-        //                 cap
-        //             };
-
-        //             // Finally, place the system CNode into slot #1 of the root CNode.
-        //             {
-        //                 let guard =
-        //                     sel4::sel4_cfg_usize!(WORD_SIZE) - root_cnode_bits - system_cnode_bits;
-        //                 let source = init_thread::slot::CNODE
-        //                     .cap()
-        //                     .absolute_cptr_from_bits_with_depth(
-        //                         system_cnode_cap.bits(),
-        //                         sel4::sel4_cfg_usize!(WORD_SIZE),
-        //                     );
-        //                 root_cnode_cap
-        //                     .absolute_cptr_from_bits_with_depth(1, root_cnode_bits)
-        //                     .mint(&source, CapRights::all(), guard.try_into().unwrap())
-        //                     .unwrap();
-        //             }
-
-        //             self.system_cap_mask = Some(1 << (sel4::sel4_cfg_usize!(WORD_SIZE) - 1));
-
-        //             break;
-        //         }
-        //     }
-
-        //     trace!("CSpace bootstrapped");
-        // }
 
         // Index root objects
         let first_obj_without_paddr = self
@@ -864,9 +714,9 @@ impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObject
                                 if badge == 0 && rights == CapRights::all() {
                                     orig
                                 } else {
-                                    let src = self.root_cnode_slot.cap().absolute_cptr(orig);
+                                    let src = init_thread::slot::CNODE.cap().absolute_cptr(orig);
                                     let new = self.cslot_alloc_or_panic().cap();
-                                    let dst = self.root_cnode_slot.cap().absolute_cptr(new);
+                                    let dst = init_thread::slot::CNODE.cap().absolute_cptr(new);
                                     dst.mint(&src, rights, badge)?;
                                     new.cast()
                                 }
@@ -946,8 +796,7 @@ impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObject
             for (i, cap) in obj.slots() {
                 let badge = cap.badge();
                 let rights = cap.rights().map(From::from).unwrap_or(CapRights::all());
-                let src = self
-                    .root_cnode_slot
+                let src = init_thread::slot::CNODE
                     .cap()
                     .absolute_cptr(self.orig_cap::<cap_type::Unspecified>(cap.obj()));
                 let dst = cnode
@@ -976,7 +825,7 @@ impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObject
 
     fn copy<U: sel4::CapType>(&mut self, cap: sel4::Cap<U>) -> Result<sel4::Cap<U>> {
         let slot = self.cslot_alloc_or_panic();
-        let src = self.root_cnode_slot.cap().absolute_cptr(cap);
+        let src = init_thread::slot::CNODE.cap().absolute_cptr(cap);
         cslot_to_absolute_cptr(slot).copy(&src, CapRights::all())?;
         Ok(slot.cap().downcast())
     }
@@ -984,13 +833,6 @@ impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObject
     //
 
     fn cslot_alloc_or_panic(&mut self) -> Slot {
-        // match self.system_cap_mask {
-        //     Some(mask) => {
-        //         let index = self.cslot_allocator.alloc_or_panic().index();
-        //         Slot::from_index(index | mask)
-        //     },
-        //     None => self.cslot_allocator.alloc_or_panic()
-        // }
         self.cslot_allocator.alloc_or_panic()
     }
 

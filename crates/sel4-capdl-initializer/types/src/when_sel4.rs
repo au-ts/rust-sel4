@@ -29,7 +29,8 @@ impl<D, M> Object<'_, D, M> {
                 Object::Frame(obj) => sel4::FrameObjectType::from_bits(obj.size_bits).unwrap().blueprint(),
                 #[sel4_cfg(ARCH_AARCH64)]
                 Object::PageTable(obj) => {
-                    // assert!(obj.level.is_none()); // sanity check // TODO
+                    let level = obj.level.unwrap();
+                    assert_eq!(obj.is_root, level == 0); // sanity check
                     if obj.is_root {
                         sel4::ObjectBlueprintSeL4Arch::VSpace.into()
                     } else {
@@ -38,7 +39,8 @@ impl<D, M> Object<'_, D, M> {
                 }
                 #[sel4_cfg(ARCH_AARCH32)]
                 Object::PageTable(obj) => {
-                    // assert!(obj.level.is_none()); // sanity check // TODO
+                    let level = obj.level.unwrap();
+                    assert_eq!(obj.is_root, level == 0); // sanity check
                     if obj.is_root {
                         sel4::ObjectBlueprintSeL4Arch::PD.into()
                     } else {
@@ -47,7 +49,8 @@ impl<D, M> Object<'_, D, M> {
                 }
                 #[sel4_cfg(any(ARCH_RISCV64, ARCH_RISCV32))]
                 Object::PageTable(_obj) => {
-                    // assert!(obj.level.is_none()); // sanity check
+                    let level = obj.level.unwrap();
+                    assert_eq!(obj.is_root, level == 0); // sanity check
                     sel4::ObjectBlueprintArch::PageTable.into()
                 }
                 #[sel4_cfg(ARCH_X86_64)]

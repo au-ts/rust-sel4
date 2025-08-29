@@ -2514,6 +2514,7 @@ dependencies = [
  "sel4-immutable-cell",
  "sel4-kernel-loader-payload-types",
  "sel4-logging",
+ "sel4-meson-uart-driver",
  "sel4-no-allocator",
  "sel4-phdrs",
  "sel4-phdrs-patched",
@@ -2578,6 +2579,15 @@ version = "0.1.0"
 dependencies = [
  "lock_api",
  "log",
+]
+
+[[package]]
+name = "sel4-meson-uart-driver"
+version = "0.1.0"
+dependencies = [
+ "embedded-hal-nb",
+ "sel4-driver-interfaces",
+ "tock-registers",
 ]
 
 [[package]]

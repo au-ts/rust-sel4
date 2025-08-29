@@ -41,6 +41,7 @@ sel4-config = { path = "../sel4/config" }
 
 [target."cfg(any(target_arch = \"arm\", target_arch = \"aarch64\"))".dependencies]
 sel4-bcm2835-aux-uart-driver = { path = "../drivers/bcm2835-aux-uart" }
+sel4-meson-uart-driver = { path = "../drivers/meson" }
 sel4-pl011-driver = { path = "../drivers/pl011" }
 smccc = "0.2.3"
 

@@ -19,7 +19,7 @@ use log::{debug, error, info, trace};
 use sel4::{
     cap_type,
     init_thread::{self, Slot},
-    CapRights, CapTypeForFrameObjectOfFixedSize,
+    CapRights, CapTypeForFrameObjectOfFixedSize, UntypedDesc,
 };
 use sel4_capdl_initializer_types::*;
 
@@ -40,6 +40,22 @@ compile_error!("unsupported configuration");
 
 type Result<T> = result::Result<T, CapDLInitializerError>;
 
+fn util_debug_print_uts(uts: &[UntypedDesc]) {
+    for (i_ut, ut) in uts.iter().enumerate() {
+        let size_bit = ut.size_bits();
+        let base = ut.paddr();
+        let end = base + (1 << size_bit);
+        debug!(
+            "{:0>2}: [0x{:0>12x}..0x{:0>12x}), size bits {}, is device {}",
+            i_ut,
+            base,
+            end,
+            size_bit,
+            ut.is_device()
+        );
+    }
+}
+
 pub struct Initializer<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B> {
     bootinfo: &'a sel4::BootInfoPtr,
     user_image_bounds: Range<usize>,
@@ -57,8 +73,57 @@ impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObject
         user_image_bounds: Range<usize>,
         spec_with_sources: &SpecWithSources<N, D, M>,
         buffers: &mut InitializerBuffers<B>,
+        expected_untypeds: &[UntypedDesc],
     ) -> ! {
         info!("Starting CapDL initializer");
+
+        if expected_untypeds.len() > 0 {
+            debug!("Detected list of expected untypeds. Validating against actual untypeds from bootinfo.");
+
+            let actual_untypeds = bootinfo.untyped_list();
+            if actual_untypeds.len() != expected_untypeds.len() {
+                error!(
+                    "Received {} untypeds but only expected {} untypeds",
+                    actual_untypeds.len(),
+                    expected_untypeds.len()
+                );
+                debug!("Expected untypeds:");
+                util_debug_print_uts(expected_untypeds);
+                debug!("Actual untypeds:");
+                util_debug_print_uts(actual_untypeds);
+                panic!("Mismatch number of expected and actual untypeds.");
+            }
+
+            let mut matches = true;
+            for ((actual_ut_idx, actual_ut), expected_ut) in actual_untypeds
+                .iter()
+                .enumerate()
+                .zip(expected_untypeds.iter())
+            {
+                if actual_ut.paddr() != expected_ut.paddr() {
+                    error!("Mismatch at UT #{}, paddr is different!", actual_ut_idx);
+                    matches = false;
+                }
+                if actual_ut.size_bits() != expected_ut.size_bits() {
+                    error!("Mismatch at UT #{}, size bits is different!", actual_ut_idx);
+                    matches = false;
+                }
+                if actual_ut.is_device() != expected_ut.is_device() {
+                    error!("Mismatch at UT #{}, is device is different!", actual_ut_idx);
+                    matches = false;
+                }
+            }
+
+            if matches {
+                debug!("Expected and actual untypeds match.");
+            } else {
+                debug!("Expected untypeds:");
+                util_debug_print_uts(expected_untypeds);
+                debug!("Actual untypeds:");
+                util_debug_print_uts(actual_untypeds);
+                panic!("Mismatch between of expected and actual untypeds.");
+            }
+        }
 
         let copy_addrs = CopyAddrs::init(bootinfo, &user_image_bounds).unwrap();
 
@@ -156,9 +221,8 @@ impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObject
                 let candidate_ut = &uts[*uts_by_paddr.get(mid).unwrap()];
                 let candidate_paddr = candidate_ut.paddr();
 
-                let candidate_ut_range = Range::from(
-                    candidate_paddr..candidate_paddr + (1 << candidate_ut.size_bits()),
-                );
+                let candidate_ut_range =
+                    Range::from(candidate_paddr..candidate_paddr + (1 << candidate_ut.size_bits()));
                 if paddr_range.start >= candidate_ut_range.end {
                     low = mid + 1;
                 } else if paddr_range.start < candidate_ut_range.start {
@@ -669,8 +733,12 @@ impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObject
                 PageTableEntry::Frame(cap) => {
                     let frame = self.orig_cap::<cap_type::UnspecifiedPage>(cap.object);
                     let rights = (&cap.rights).into();
-                    self.copy(frame)?
-                        .ept_frame_map(eptpml4, vaddr, rights, cap.vm_attributes(obj.x86_ept))?;
+                    self.copy(frame)?.ept_frame_map(
+                        eptpml4,
+                        vaddr,
+                        rights,
+                        cap.vm_attributes(obj.x86_ept),
+                    )?;
                 }
                 PageTableEntry::PageTable(cap) => {
                     self.orig_cap::<cap_type::UnspecifiedIntermediateTranslationTable>(cap.object)
@@ -703,8 +771,12 @@ impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObject
                 PageTableEntry::Frame(cap) => {
                     let frame = self.orig_cap::<cap_type::UnspecifiedPage>(cap.object);
                     let rights = (&cap.rights).into();
-                    self.copy(frame)?
-                        .frame_map(vspace, vaddr, rights, cap.vm_attributes(obj.x86_ept))?;
+                    self.copy(frame)?.frame_map(
+                        vspace,
+                        vaddr,
+                        rights,
+                        cap.vm_attributes(obj.x86_ept),
+                    )?;
                 }
                 PageTableEntry::PageTable(cap) => {
                     self.orig_cap::<cap_type::UnspecifiedIntermediateTranslationTable>(cap.object)

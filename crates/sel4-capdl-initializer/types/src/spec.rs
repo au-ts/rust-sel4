@@ -214,6 +214,7 @@ pub mod object {
     #[derive(Debug, Clone, Eq, PartialEq, IsObject, IsObjectWithCapTable)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct PageTable<'a> {
+        pub x86_ept: bool,
         pub is_root: bool,
         pub level: Option<u8>,
         pub slots: Indirect<'a, [CapTableEntry]>,

@@ -137,6 +137,68 @@ impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObject
             .partition_point(|named_obj| named_obj.object.paddr().is_some());
         let num_objs_with_paddr = first_obj_without_paddr;
 
+        // Sanity check that all objects with a paddr attached can be allocated.
+        let mut phys_addrs_ok = true;
+        for obj_with_paddr_id in 0..first_obj_without_paddr {
+            let named_obj = self.spec().named_object(obj_with_paddr_id);
+            let paddr_base = named_obj.object.paddr().unwrap();
+
+            let blueprint = named_obj.object.blueprint().unwrap();
+            let obj_size_bytes = 1 << blueprint.physical_size_bits();
+            let paddr_range = Range::from(paddr_base..paddr_base + obj_size_bytes);
+
+            // Binary search for the untyped that would fit, if we can't find one, this object is not in valid memory.
+            let mut low = 0;
+            let mut high = uts.len();
+            let mut found = false;
+            while low < high {
+                let mid = low + (high - low) / 2;
+                let candidate_ut = &uts[*uts_by_paddr.get(mid).unwrap()];
+                let candidate_paddr = candidate_ut.paddr();
+
+                let candidate_ut_range = Range::from(
+                    candidate_paddr..candidate_paddr + (1 << candidate_ut.size_bits()),
+                );
+                if paddr_range.start >= candidate_ut_range.end {
+                    low = mid + 1;
+                } else if paddr_range.start < candidate_ut_range.start {
+                    high = mid;
+                } else if paddr_range.start >= candidate_ut_range.start {
+                    if paddr_range.end <= candidate_ut_range.end {
+                        // Object paddr range doesn't span across 2 untypeds, all good.
+                        found = true;
+                    }
+                    break;
+                }
+            }
+
+            if !found {
+                error!("Cannot create object '{}', with paddr {:#x}..{:#x}, size bit {} because there are no valid untypeds to cover the allocation.", self.object_name(&named_obj.name).unwrap_or("<none>"), paddr_range.start, paddr_range.end, blueprint.physical_size_bits());
+                phys_addrs_ok = false;
+            }
+        }
+
+        if !phys_addrs_ok {
+            debug!("Below are the valid ranges of memory to be allocated from:");
+            debug!("Valid ranges outside of main memory:");
+            for i_ut in uts_by_paddr.iter().filter(|i_ut| uts[**i_ut].is_device()) {
+                let ut = &uts[*i_ut];
+                let size_bit = ut.size_bits();
+                let base = ut.paddr();
+                let end = base + (1 << size_bit);
+                debug!("     [0x{:0>12x}..0x{:0>12x})", base, end);
+            }
+            debug!("Valid ranges within main memory:");
+            for i_ut in uts_by_paddr.iter().filter(|i_ut| !uts[**i_ut].is_device()) {
+                let ut = &uts[*i_ut];
+                let size_bit = ut.size_bits();
+                let base = ut.paddr();
+                let end = base + (1 << size_bit);
+                debug!("     [0x{:0>12x}..0x{:0>12x})", base, end);
+            }
+            panic!("Encountered a spec object with physical address constraint that cannot be satisfied.");
+        }
+
         let mut by_size_start: [usize; sel4::WORD_SIZE] = array::from_fn(|_| 0);
         let mut by_size_end: [usize; sel4::WORD_SIZE] = array::from_fn(|_| 0);
         {

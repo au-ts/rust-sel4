@@ -596,7 +596,7 @@ impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObject
             init_thread::slot::VSPACE.cap(),
             self.copy_addrs.select(frame_object_type),
             CapRights::read_write(),
-            vm_attributes_from_whether_cached(false),
+            vm_attributes_from_whether_cached_and_exec(false, false, false),
         )?;
         for entry in fill.iter() {
             let offset = entry.range.start;
@@ -670,7 +670,7 @@ impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObject
                     let frame = self.orig_cap::<cap_type::UnspecifiedPage>(cap.object);
                     let rights = (&cap.rights).into();
                     self.copy(frame)?
-                        .ept_frame_map(eptpml4, vaddr, rights, cap.vm_attributes())?;
+                        .ept_frame_map(eptpml4, vaddr, rights, cap.vm_attributes(obj.x86_ept))?;
                 }
                 PageTableEntry::PageTable(cap) => {
                     self.orig_cap::<cap_type::UnspecifiedIntermediateTranslationTable>(cap.object)
@@ -678,7 +678,7 @@ impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObject
                             sel4::TranslationTableObjectType::from_level_ept(level + 1).unwrap(),
                             eptpml4,
                             vaddr,
-                            cap.vm_attributes(),
+                            cap.vm_attributes(obj.x86_ept),
                         )?;
                     let obj = self
                         .spec()
@@ -704,7 +704,7 @@ impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObject
                     let frame = self.orig_cap::<cap_type::UnspecifiedPage>(cap.object);
                     let rights = (&cap.rights).into();
                     self.copy(frame)?
-                        .frame_map(vspace, vaddr, rights, cap.vm_attributes())?;
+                        .frame_map(vspace, vaddr, rights, cap.vm_attributes(obj.x86_ept))?;
                 }
                 PageTableEntry::PageTable(cap) => {
                     self.orig_cap::<cap_type::UnspecifiedIntermediateTranslationTable>(cap.object)
@@ -712,7 +712,7 @@ impl<'a, N: ObjectName, D: Content, M: GetEmbeddedFrame, B: BorrowMut<[PerObject
                             sel4::TranslationTableObjectType::from_level(level + 1).unwrap(),
                             vspace,
                             vaddr,
-                            cap.vm_attributes(),
+                            cap.vm_attributes(obj.x86_ept),
                         )?;
                     let obj = self
                         .spec()

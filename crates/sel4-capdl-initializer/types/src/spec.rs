@@ -370,6 +370,7 @@ pub mod cap {
         pub object: ObjectId,
         pub rights: Rights,
         pub cached: bool,
+        pub execute: bool,
     }
 
     #[derive(Debug, Clone, Eq, PartialEq, IsCap)]

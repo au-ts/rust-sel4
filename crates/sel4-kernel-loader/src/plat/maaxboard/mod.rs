@@ -1,5 +1,3 @@
-
-...
 //
 // Copyright 2023, Colias Group, LLC
 // Copyright 2025, UNSW

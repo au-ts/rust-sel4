@@ -19,6 +19,9 @@ sel4_cfg_if! {
     } else if #[sel4_cfg(all(any(ARCH_AARCH64, ARCH_AARCH32), PLAT_ODROIDC2))] {
         #[path = "odroidc2/mod.rs"]
         mod imp;
+    } else if #[sel4_cfg(all(any(ARCH_AARCH64, ARCH_AARCH32), PLAT_MAAXBOARD))] {
+        #[path = "maaxboard/mod.rs"]
+        mod imp;
     }
 }
 
@@ -31,6 +34,8 @@ mod qemu_arm_virt;
 mod riscv_generic;
 #[cfg(any())]
 mod odroidc2;
+#[cfg(any())]
+mod maaxboard;
 // TODO: need to add meson?
 
 #[allow(unused_imports)]

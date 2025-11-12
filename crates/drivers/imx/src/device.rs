@@ -19,9 +19,9 @@ const UART_STAT_TDRE: u32 = 1 << 14;
 register_structs! {
     #[allow(non_snake_case)]
     pub(crate)ImxRegisterBlock {
-        (0x98 => stat: ReadWrite<u32>),
         (0x40 => transmit: ReadWrite<u32>),
-        (0x110 => @END),
+        (0x98 => stat: ReadWrite<u32>),
+        (0x9c => @END),
     }
 }
 

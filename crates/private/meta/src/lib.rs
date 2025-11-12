@@ -131,6 +131,7 @@ definitely! {
     sel4_virtio_blk
     sel4_virtio_hal_impl
     sel4_meson_uart_driver
+    sel4_imx_uart_driver
 }
 
 maybe! {

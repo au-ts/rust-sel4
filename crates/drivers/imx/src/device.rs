@@ -20,6 +20,7 @@ register_structs! {
     #[allow(non_snake_case)]
     pub(crate)ImxRegisterBlock {
         (0x40 => transmit: ReadWrite<u32>),
+        (0x44 => _reserved0),
         (0x98 => stat: ReadWrite<u32>),
         (0x9c => @END),
     }

@@ -45,7 +45,7 @@ impl Device {
     }
 
     pub(crate) fn put_char(&self, c: u8) {
-        while self.stat.get() & UART_STAT_TDRE != 0 {}
+        while (self.stat.get() & UART_STAT_TDRE) == 0 {}
         self.transmit.set(c as u32);
     }
 }

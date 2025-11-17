@@ -14,6 +14,7 @@ use sel4_capdl_initializer_types::SpecForInitializer;
 use sel4_immutable_cell::ImmutableCell;
 use sel4_logging::{LevelFilter, Logger, LoggerBuilder};
 use sel4_root_task::{debug_print, root_task};
+use sel4::{UntypedDesc, sel4_cfg_usize};
 
 use crate::initialize::Initializer;
 
@@ -47,6 +48,20 @@ static sel4_capdl_initializer_image_start: ImmutableCell<*mut u8> =
 static sel4_capdl_initializer_image_end: ImmutableCell<*mut u8> =
     ImmutableCell::new(ptr::null_mut());
 
+const UNTYPED_DESC_SIZE: usize = size_of::<UntypedDesc>();
+const MAX_UNTYPEDS: usize = sel4_cfg_usize!(MAX_NUM_BOOTINFO_UNTYPED_CAPS);
+
+/// Optional
+#[unsafe(no_mangle)]
+#[unsafe(link_section = ".data")]
+static mut sel4_capdl_initializer_expected_untypeds_list: [u8; UNTYPED_DESC_SIZE * MAX_UNTYPEDS] =
+    [0; UNTYPED_DESC_SIZE * MAX_UNTYPEDS];
+
+/// Optional
+#[unsafe(no_mangle)]
+#[unsafe(link_section = ".data")]
+static mut sel4_capdl_initializer_expected_untypeds_list_num_entries: usize = 0;
+
 const LOG_LEVEL: LevelFilter = {
     // LevelFilter::Trace
     // LevelFilter::Debug
@@ -72,6 +87,7 @@ fn main(bootinfo: &sel4::BootInfoPtr) -> ! {
         user_image_bounds(),
         spec,
         *sel4_capdl_initializer_embedded_frames_data_start.get() as usize,
+        get_expected_untypeds(),
     )
 }
 
@@ -97,4 +113,15 @@ fn access_spec(bytes: &[u8]) -> &<SpecForInitializer as Archive>::Archived {
 #[cfg(not(feature = "alloc"))]
 fn access_spec(bytes: &[u8]) -> &<SpecForInitializer as Archive>::Archived {
     unsafe { SpecForInitializer::access_unchecked(bytes) }
+}
+
+/// This is useful for error checking when your upstream spec generation tool expects a certain range of untypeds from the kernel.
+fn get_expected_untypeds() -> &'static [UntypedDesc] {
+    #[allow(static_mut_refs)]
+    unsafe {
+        let num_entries = sel4_capdl_initializer_expected_untypeds_list_num_entries
+            .min(sel4::sel4_cfg_usize!(MAX_NUM_BOOTINFO_UNTYPED_CAPS));
+        let ptr = sel4_capdl_initializer_expected_untypeds_list.as_ptr() as *const UntypedDesc;
+        core::slice::from_raw_parts(ptr, num_entries)
+    }
 }

@@ -17,7 +17,7 @@ use log::{debug, error, info, trace};
 
 use sel4::{
     CapRights, CapTypeForFrameObjectOfFixedSize, cap_type,
-    init_thread::{self, Slot},
+    init_thread::{self, Slot}, UntypedDesc
 };
 use sel4_capdl_initializer_types::*;
 
@@ -38,14 +38,85 @@ pub struct Initializer<'a> {
     cslot_allocator: &'a mut CSlotAllocator,
 }
 
+fn util_error_print_uts(uts: &[UntypedDesc]) {
+    for (i_ut, ut) in uts.iter().enumerate() {
+        let size_bit = ut.size_bits();
+        let base = ut.paddr();
+        let end = base + (1 << size_bit);
+
+        error!(
+            "{:0>2}: [0x{:0>12x}..0x{:0>12x}), size bits {}, is device {}",
+            i_ut,
+            base,
+            end,
+            size_bit,
+            ut.is_device()
+        );
+    }
+}
+
 impl<'a> Initializer<'a> {
     pub fn initialize(
         bootinfo: &sel4::BootInfoPtr,
         user_image_bounds: Range<usize>,
         spec: &'a <SpecForInitializer as Archive>::Archived,
         embedded_frames_base_addr: usize,
+        expected_untypeds: &[UntypedDesc],
     ) -> ! {
         info!("Starting CapDL initializer");
+
+        if !expected_untypeds.is_empty() {
+            debug!(
+                "Detected list of expected untypeds. Validating against actual untypeds from bootinfo."
+            );
+
+            let actual_untypeds = bootinfo.untyped_list();
+
+            if actual_untypeds.len() != expected_untypeds.len() {
+                error!(
+                    "Received {} untypeds but only expected {} untypeds",
+                    actual_untypeds.len(),
+                    expected_untypeds.len()
+                );
+                error!("Expected untypeds:");
+                util_error_print_uts(expected_untypeds);
+                error!("Actual untypeds:");
+                util_error_print_uts(actual_untypeds);
+                panic!("Mismatch number of expected and actual untypeds.");
+            }
+
+            let mut matches = true;
+            for ((actual_ut_idx, actual_ut), expected_ut) in actual_untypeds
+                .iter()
+                .enumerate()
+                .zip(expected_untypeds.iter())
+            {
+                if actual_ut.paddr() != expected_ut.paddr() {
+                    error!("Mismatch at UT #{actual_ut_idx}, paddr is different!");
+                    matches = false;
+                }
+
+                if actual_ut.size_bits() != expected_ut.size_bits() {
+                    error!("Mismatch at UT #{actual_ut_idx}, size bits is different!");
+                    matches = false;
+                }
+
+                if actual_ut.is_device() != expected_ut.is_device() {
+                    error!("Mismatch at UT #{actual_ut_idx}, is device is different!");
+                    matches = false;
+                }
+            }
+
+            if matches {
+                debug!("Expected and actual untypeds match.");
+            } else {
+                error!("Expected untypeds:");
+                util_error_print_uts(expected_untypeds);
+                error!("Actual untypeds:");
+                util_error_print_uts(actual_untypeds);
+                panic!("Mismatch between of expected and actual untypeds.");
+            }
+        }
 
         let copy_addrs = CopyAddrs::init(bootinfo, &user_image_bounds).unwrap();
 

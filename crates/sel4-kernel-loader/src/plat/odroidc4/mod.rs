@@ -10,18 +10,18 @@ use spin::Mutex;
 use embedded_hal_nb::nb;
 use embedded_hal_nb::serial::Write;
 use sel4_config::sel4_cfg_bool;
-use sel4_imx_uart_driver::Driver as ImxDriver;
+use sel4_meson_uart_driver::Driver as MesonDriver;
 use crate::{
     arch::{drivers::psci, reset_cntvoff},
     plat::Plat,
 };
 
-const SERIAL_DEVICE_BASE_ADDR: usize =  0x30860000;
+const SERIAL_DEVICE_BASE_ADDR: usize =  0xff803000;
 
-static SERIAL_DEVICE: Mutex<ImxDriver> = Mutex::new(get_serial_device());
+static SERIAL_DEVICE: Mutex<MesonDriver> = Mutex::new(get_serial_device());
 
-const fn get_serial_device() -> ImxDriver {
-    unsafe { ImxDriver::new_uninit(SERIAL_DEVICE_BASE_ADDR as *mut _) }
+const fn get_serial_device() -> MesonDriver {
+    unsafe { MesonDriver::new_uninit(SERIAL_DEVICE_BASE_ADDR as *mut _) }
 }
 
 pub(crate) enum PlatImpl {}

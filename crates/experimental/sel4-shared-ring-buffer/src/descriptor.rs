@@ -12,25 +12,23 @@ use zerocopy::{FromBytes, Immutable, IntoBytes};
 #[derive(Copy, Clone, Debug, PartialOrd, Ord, PartialEq, Eq, FromBytes, IntoBytes, Immutable)]
 pub struct Descriptor {
     encoded_addr: usize,
-    len: u32,
-    _padding: [u8; 4],
-    cookie: usize,
+    len: u16,
+    _padding: [u8; 6],
 }
 
 impl Descriptor {
-    pub fn new(encoded_addr: usize, len: u32, cookie: usize) -> Self {
+    pub fn new(encoded_addr: usize, len: u16) -> Self {
         Self {
             encoded_addr,
             len,
-            _padding: [0; 4],
-            cookie,
+            _padding: [0; 6],
         }
     }
 
-    pub fn from_encoded_addr_range(encoded_addr_range: Range<usize>, cookie: usize) -> Self {
+    pub fn from_encoded_addr_range(encoded_addr_range: Range<usize>) -> Self {
         let encoded_addr = encoded_addr_range.start;
         let len = encoded_addr_range.len().try_into().unwrap();
-        Self::new(encoded_addr, len, cookie)
+        Self::new(encoded_addr, len)
     }
 
     pub fn encoded_addr(&self) -> usize {
@@ -42,20 +40,12 @@ impl Descriptor {
     }
 
     #[allow(clippy::len_without_is_empty)]
-    pub fn len(&self) -> u32 {
+    pub fn len(&self) -> u16 {
         self.len
     }
 
-    pub fn set_len(&mut self, len: u32) {
+    pub fn set_len(&mut self, len: u16) {
         self.len = len;
-    }
-
-    pub fn cookie(&self) -> usize {
-        self.cookie
-    }
-
-    pub fn set_cookie(&mut self, cookie: usize) {
-        self.cookie = cookie;
     }
 
     pub fn encoded_addr_range(&self) -> Range<usize> {

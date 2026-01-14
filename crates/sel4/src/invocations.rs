@@ -327,6 +327,21 @@ impl<C: InvocationContext> IrqControl<C> {
             )
         }))
     }
+
+    /// Corresponds to `seL4_IRQControl_IssueSGISignal`
+    #[sel4_cfg(all(ARCH_AARCH64, not(ENABLE_SMP_SUPPORT)))]
+    pub fn irq_control_issue_sgi_signal(self, irq: Word, target: Word, dst: &AbsoluteCPtr) -> Result<()> {
+        Error::wrap(self.invoke(|cptr, ipc_buffer| {
+            ipc_buffer.inner_mut().seL4_IRQControl_IssueSGISignal(
+                cptr.bits(),
+                irq,
+                target,
+                dst.root().bits(),
+                dst.path().bits(),
+                dst.path().depth_for_kernel(),
+            )
+        }))
+    }
 }
 
 impl<C: InvocationContext> IrqHandler<C> {

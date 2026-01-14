@@ -960,7 +960,7 @@ impl<'a> Initializer<'a> {
                 }
             }
             ArchivedObject::DomainSet => {
-                init_thread::slot::DomainSet.upcast()
+                init_thread::slot::DOMAIN_SET.upcast()
             }
             ArchivedObject::Frame(object::ArchivedFrame {
                 init: ArchivedFrameInit::Embedded(embedded),

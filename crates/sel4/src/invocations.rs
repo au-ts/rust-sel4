@@ -364,7 +364,7 @@ impl<C: InvocationContext> DomainSet<C> {
                 domain,
                 thread.bits(),
             )
-        }
+        }))
     }
 }
 

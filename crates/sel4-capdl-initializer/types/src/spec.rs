@@ -188,6 +188,7 @@ pub enum Object<D> {
     SchedContext(object::SchedContext),
     Reply,
     ArmSmc,
+    DomainSet,
 }
 
 pub trait IsObject<D> {
@@ -275,6 +276,7 @@ pub enum Cap {
     SchedContext(cap::SchedContext),
     Reply(cap::Reply),
     ArmSmc(cap::ArmSmc),
+    DomainSet(cap::DomainSet),
 }
 
 pub trait IsCap {
@@ -307,6 +309,7 @@ impl Cap {
             Self::SchedContext(cap) => cap.object,
             Self::Reply(cap) => cap.object,
             Self::ArmSmc(cap) => cap.object,
+            Self::DomainSet(cap) => cap.object,
         }
     }
 
@@ -330,6 +333,7 @@ impl Cap {
             Self::SchedContext(cap) => cap.object = object,
             Self::Reply(cap) => cap.object = object,
             Self::ArmSmc(cap) => cap.object = object,
+            Self::DomainSet(cap) => cap.object = object,
         }
     }
 }
@@ -363,6 +367,7 @@ impl ArchivedCap {
             Self::SchedContext(cap) => cap.object,
             Self::Reply(cap) => cap.object,
             Self::ArmSmc(cap) => cap.object,
+            Self::DomainSet(cap) => cap.object,
         }
     }
 }
@@ -690,6 +695,13 @@ pub mod cap {
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     #[derive(rkyv::Archive, rkyv::Deserialize, rkyv::Serialize)]
     pub struct ArmSmc {
+        pub object: ObjectId,
+    }
+
+    #[derive(Debug, Clone, Eq, PartialEq, IsCap)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[derive(rkyv::Archive, rkyv::Deserialize, rkyv::Serialize)]
+    pub struct DomainSet {
         pub object: ObjectId,
     }
 }

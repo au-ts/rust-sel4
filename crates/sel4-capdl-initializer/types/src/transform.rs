@@ -111,6 +111,7 @@ impl<D> Spec<D> {
                             Object::SchedContext(obj) => Object::SchedContext(obj.clone()),
                             Object::Reply => Object::Reply,
                             Object::ArmSmc => Object::ArmSmc,
+                            Object::DomainSet => Object::DomainSet,
                         },
                     })
                 })

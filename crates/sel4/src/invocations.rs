@@ -356,6 +356,18 @@ impl<C: InvocationContext> IrqHandler<C> {
     }
 }
 
+impl<C: InvocationContext> DomainSet<C> {
+    pub fn domain_set(self, domain: u8, thread: Tcb) -> Result<()> {
+        Error::wrap(self.invoke(|cptr, ipc_buffer| {
+            ipc_buffer.inner_mut().seL4_DomainSet_Set(
+                cptr.bits(),
+                domain,
+                thread.bits(),
+            )
+        }
+    }
+}
+
 impl<C: InvocationContext> AbsoluteCPtr<C> {
     /// Corresponds to `seL4_CNode_Revoke`.
     pub fn revoke(self) -> Result<()> {

@@ -342,6 +342,18 @@ impl<C: InvocationContext> IrqControl<C> {
             )
         }))
     }
+
+    /// Corresponds to `seL4_IRQControl_SetIrqTargetCore
+    #[sel4_cfg(all(ARCH_AARCH64, ENABLE_MULTIKERNEL_SUPPORT))]
+    pub fn irq_control_set_irq_target_core(self, irq: Word, target: Word) -> Result<()> {
+        Error::wrap(self.invoke(|cptr, ipc_buffer| {
+            ipc_buffer.inner_mut().seL4_IRQControl_SetIrqTargetCore(
+                cptr.bits(),
+                irq,
+                target,
+            )
+        }))
+    }
 }
 
 impl<C: InvocationContext> IrqHandler<C> {

@@ -112,6 +112,7 @@ pub struct Spec<D> {
     pub cached_orig_cap_slots: Option<OrigCapSlots>,
     #[cfg_attr(feature = "serde", serde(default))]
     pub log_level: Option<u8>,
+    pub cpu_id: u8,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -184,6 +185,7 @@ pub enum Object<D> {
     IrqMsi(object::IrqMsi),
     IrqIOApic(object::IrqIOApic),
     RiscvIrq(object::RiscvIrq),
+    SGISignal(object::SGISignal),
     IOPorts(object::IOPorts),
     SchedContext(object::SchedContext),
     Reply,
@@ -272,6 +274,7 @@ pub enum Cap {
     IrqMsiHandler(cap::IrqMsiHandler),
     IrqIOApicHandler(cap::IrqIOApicHandler),
     RiscvIrqHandler(cap::RiscvIrqHandler),
+    SGISignal(cap::SGISignal),
     IOPorts(cap::IOPorts),
     SchedContext(cap::SchedContext),
     Reply(cap::Reply),
@@ -305,6 +308,7 @@ impl Cap {
             Self::IrqMsiHandler(cap) => cap.object,
             Self::IrqIOApicHandler(cap) => cap.object,
             Self::RiscvIrqHandler(cap) => cap.object,
+            Self::SGISignal(cap) => cap.object,
             Self::IOPorts(cap) => cap.object,
             Self::SchedContext(cap) => cap.object,
             Self::Reply(cap) => cap.object,
@@ -329,6 +333,7 @@ impl Cap {
             Self::IrqMsiHandler(cap) => cap.object = object,
             Self::IrqIOApicHandler(cap) => cap.object = object,
             Self::RiscvIrqHandler(cap) => cap.object = object,
+            Self::SGISignal(cap) => cap.object = object,
             Self::IOPorts(cap) => cap.object = object,
             Self::SchedContext(cap) => cap.object = object,
             Self::Reply(cap) => cap.object = object,
@@ -363,6 +368,7 @@ impl ArchivedCap {
             Self::IrqMsiHandler(cap) => cap.object,
             Self::IrqIOApicHandler(cap) => cap.object,
             Self::RiscvIrqHandler(cap) => cap.object,
+            Self::SGISignal(cap) => cap.object,
             Self::IOPorts(cap) => cap.object,
             Self::SchedContext(cap) => cap.object,
             Self::Reply(cap) => cap.object,
@@ -529,6 +535,14 @@ pub mod object {
     #[derive(Debug, Clone, Eq, PartialEq, IsObject)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     #[derive(rkyv::Archive, rkyv::Deserialize, rkyv::Serialize)]
+    pub struct SGISignal {
+        pub irq: Word,
+        pub target: Word,
+    }
+
+    #[derive(Debug, Clone, Eq, PartialEq, IsObject)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[derive(rkyv::Archive, rkyv::Deserialize, rkyv::Serialize)]
     pub struct SchedContext {
         pub size_bits: u8,
         pub extra: SchedContextExtraInfo,
@@ -667,6 +681,13 @@ pub mod cap {
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     #[derive(rkyv::Archive, rkyv::Deserialize, rkyv::Serialize)]
     pub struct RiscvIrqHandler {
+        pub object: ObjectId,
+    }
+
+    #[derive(Debug, Clone, Eq, PartialEq, IsCap)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[derive(rkyv::Archive, rkyv::Deserialize, rkyv::Serialize)]
+    pub struct SGISignal {
         pub object: ObjectId,
     }
 

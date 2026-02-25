@@ -107,6 +107,7 @@ impl<D> Spec<D> {
                             Object::IrqMsi(obj) => Object::IrqMsi(obj.clone()),
                             Object::IrqIOApic(obj) => Object::IrqIOApic(obj.clone()),
                             Object::RiscvIrq(obj) => Object::RiscvIrq(obj.clone()),
+                            Object::SGISignal(obj) => Object::SGISignal(obj.clone()),
                             Object::IOPorts(obj) => Object::IOPorts(obj.clone()),
                             Object::SchedContext(obj) => Object::SchedContext(obj.clone()),
                             Object::Reply => Object::Reply,
@@ -122,6 +123,7 @@ impl<D> Spec<D> {
             untyped_covers: self.untyped_covers.clone(),
             cached_orig_cap_slots: self.cached_orig_cap_slots.clone(),
             log_level: self.log_level,
+            cpu_id: self.cpu_id,
         })
     }
 }

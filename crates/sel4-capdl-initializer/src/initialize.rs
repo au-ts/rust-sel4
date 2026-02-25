@@ -36,6 +36,7 @@ pub struct Initializer<'a> {
     embedded_frames_base_addr: usize,
     orig_cslots: Range<Slot>,
     cslot_allocator: &'a mut CSlotAllocator,
+    cpu_id: u8,
 }
 
 impl<'a> Initializer<'a> {
@@ -45,7 +46,7 @@ impl<'a> Initializer<'a> {
         spec: &'a <SpecForInitializer as Archive>::Archived,
         embedded_frames_base_addr: usize,
     ) -> ! {
-        info!("Starting CapDL initializer");
+        info!("Starting CapDL initializer on core {}", spec.cpu_id);
 
         let copy_addrs = CopyAddrs::init(bootinfo, &user_image_bounds).unwrap();
 
@@ -70,6 +71,7 @@ impl<'a> Initializer<'a> {
             embedded_frames_base_addr,
             orig_cslots,
             cslot_allocator: &mut cslot_allocator,
+            cpu_id: spec.cpu_id,
         }
         .run()
         .unwrap_or_else(|err| panic!("Error: {}", err));
@@ -82,6 +84,7 @@ impl<'a> Initializer<'a> {
     // // //
 
     fn run(&mut self) -> Result<()> {
+        debug!("Running on cpu_id: {}", self.cpu_id);
         self.create_objects()?;
 
         self.init_irqs()?;
@@ -107,8 +110,9 @@ impl<'a> Initializer<'a> {
         // This algorithm differs from that found in the upstream C CapDL
         // loader. In particular, this one is implemented with objects
         // specifying non-device paddrs in mind.
-
-        debug!("Creating objects");
+        if self.cpu_id == 1 {
+            debug!("Creating objects");
+        }
 
         // Sort untypeds by paddr
         let mut _uts_by_paddr_backing: [usize;
@@ -263,6 +267,7 @@ impl<'a> Initializer<'a> {
                                 }
                                 break;
                             }
+                            // debug!("Creating kernel objects!");
                             // Create a largest possible object that would fit
                             if *obj_id < by_size_end[size_bits] {
                                 let named_obj = &self.named_object((*obj_id).into());
@@ -287,6 +292,7 @@ impl<'a> Initializer<'a> {
                             }
                         }
                     }
+                    // debug!("Creating dummy objects!");
                     if !created {
                         if target_is_obj_with_paddr {
                             let hold_slot = hold_slots.get_slot()?;
@@ -308,6 +314,7 @@ impl<'a> Initializer<'a> {
                         }
                     }
                 }
+                // debug!("Creating device objects!");
                 if target_is_obj_with_paddr {
                     let obj_id = next_obj_with_paddr;
                     let named_obj = &self.named_object(obj_id.into());
@@ -348,6 +355,8 @@ impl<'a> Initializer<'a> {
         }
 
         // Create child objects
+
+        // debug!("Creating child objects!");
 
         for cover in self.spec.untyped_covers.iter() {
             let parent_obj_id = cover.parent;
@@ -471,11 +480,26 @@ impl<'a> Initializer<'a> {
             }
         }
 
+        info!("Creating SGI caps!");
+        let sgi_signal_caps = self
+            .filter_objects::<object::ArchivedSGISignal>()
+            .map(|(obj_id, obj)| (obj_id, obj.irq, obj.target));
+
+        for (obj_id, irq, target) in sgi_signal_caps {
+            let slot = self.orig_cslot(obj_id);
+            init_thread::slot::IRQ_CONTROL
+                .cap()
+                .irq_control_issue_sgi_signal(irq.to_sel4(), target.to_sel4(), &cslot_to_absolute_cptr(slot))?;
+        }
+
+
         Ok(())
     }
 
     fn init_irqs(&mut self) -> Result<()> {
-        debug!("Initializing IRQs");
+        if self.cpu_id == 1 {
+            debug!("Initializing IRQs");
+        }
 
         let irq_notifications = self
             .filter_objects::<object::ArchivedIrq>()
@@ -518,7 +542,9 @@ impl<'a> Initializer<'a> {
     }
 
     fn init_asids(&self) -> Result<()> {
-        debug!("Initializing ASIDs");
+        if self.cpu_id == 1 {
+            debug!("Initializing ASIDs");
+        }
         for (obj_id, _obj) in
             self.filter_objects_with::<object::ArchivedPageTable>(|obj| obj.is_root)
         {
@@ -529,7 +555,10 @@ impl<'a> Initializer<'a> {
     }
 
     fn init_frames(&mut self) -> Result<()> {
-        debug!("Initializing Frames");
+        if self.cpu_id == 1 {
+            debug!("Initializing Frames");
+        }
+        
         for (obj_id, obj) in self.filter_objects::<object::ArchivedFrame<_>>() {
             // TODO make more platform-agnostic
             if let ArchivedFrameInit::Fill(fill) = &obj.init
@@ -592,7 +621,10 @@ impl<'a> Initializer<'a> {
     }
 
     fn init_vspaces(&mut self) -> Result<()> {
-        debug!("Initializing VSpaces");
+        if self.cpu_id == 1 {
+            debug!("Initializing VSpaces");
+        }
+        
         for (obj_id, obj) in
             self.filter_objects_with::<object::ArchivedPageTable>(|obj| obj.is_root)
         {
@@ -681,7 +713,10 @@ impl<'a> Initializer<'a> {
 
     #[sel4::sel4_cfg(KERNEL_MCS)]
     fn init_sched_contexts(&self) -> Result<()> {
-        debug!("Initializing scheduling contexts");
+        if self.cpu_id == 1 {
+            debug!("Initializing scheduling contexts");
+        }
+        
         for (obj_id, _obj) in self.filter_objects::<object::ArchivedSchedContext>() {
             self.init_sched_context(obj_id, 0)?;
         }
@@ -690,6 +725,11 @@ impl<'a> Initializer<'a> {
 
     #[sel4::sel4_cfg(KERNEL_MCS)]
     fn init_sched_context(&self, obj_id: ArchivedObjectId, affinity: usize) -> Result<()> {
+        if self.cpu_id == 1 {
+            debug!("Init Shed Context! This is affinity: {}", affinity);
+        }
+        // @kwinter: The affinity will always be 0 in this case, as we are not
+        // running on smp.
         let obj = self.object_as::<object::ArchivedSchedContext>(obj_id);
         let sched_context = self.orig_cap::<cap_type::SchedContext>(obj_id);
         self.bootinfo
@@ -708,17 +748,27 @@ impl<'a> Initializer<'a> {
     }
 
     fn init_tcbs(&mut self) -> Result<()> {
-        debug!("Initializing TCBs");
+        if self.cpu_id == 1 {
+            debug!("Initializing TCBs");
+        }
+        
+        let tcbs = self.filter_objects::<object::ArchivedTcb>();
+        // debug!("This is the number of TCBs: {:?} and reuse a {}", tcbs.size_hint(), a);
 
         for (obj_id, obj) in self.filter_objects::<object::ArchivedTcb>() {
             let tcb = self.orig_cap::<cap_type::Tcb>(obj_id);
-
+            if self.cpu_id == 1 {
+                debug!("Setting up a TCB!");
+            }
+            
             if let Some(bound_notification) = obj.bound_notification() {
                 let bound_notification =
                     self.orig_cap::<cap_type::Notification>(bound_notification.object);
                 tcb.tcb_bind_notification(bound_notification)?;
             }
-
+            if self.cpu_id == 1 {
+                debug!("\tBound TCB and Notification");
+            }
             sel4::sel4_cfg_if! {
                 if #[sel4_cfg(any(all(ARCH_ARM, ARM_HYPERVISOR_SUPPORT), all(ARCH_X86_64, VTX)))] {
                     if let Some(vcpu) = obj.vcpu() {
@@ -735,7 +785,9 @@ impl<'a> Initializer<'a> {
                     }
                 }
             }
-
+            if self.cpu_id == 1 {
+                debug!("\tSet up VCPU and ept root(if on x86)");
+            }
             {
                 let cspace = self.orig_cap(obj.cspace().object);
                 let cspace_root_data = sel4::CNodeCapData::new(
@@ -752,11 +804,21 @@ impl<'a> Initializer<'a> {
 
                 #[allow(unused_variables)]
                 let affinity = obj.extra.affinity.to_sel4();
-
+                if self.cpu_id == 1 {
+                    debug!("\tRetrieved info for thread");
+                }
                 sel4::sel4_cfg_if! {
                     if #[sel4_cfg(KERNEL_MCS)] {
+                        if self.cpu_id == 1 {
+                            debug!("\tTrying to init sched context!");
+                        }
                         if let Some(sched_context_cap) = obj.sc() {
-                            self.init_sched_context(sched_context_cap.object, affinity.try_into().unwrap())?;
+                            // self.init_sched_context(sched_context_cap.object, affinity.try_into().unwrap())?;
+                            self.init_sched_context(sched_context_cap.object, 0)?;
+
+                        }
+                        if self.cpu_id == 1 {
+                            debug!("\tFinished init sched context");
                         }
 
                         tcb.tcb_configure(
@@ -766,12 +828,16 @@ impl<'a> Initializer<'a> {
                             ipc_buffer_addr,
                             ipc_buffer_frame,
                         )?;
-
+                        if self.cpu_id == 1 {
+                            debug!("\tFinished TCB configure");
+                        }
                         let sc = match obj.sc() {
                             None => init_thread::slot::NULL.cap().cast::<cap_type::SchedContext>(),
                             Some(cap) => self.orig_cap::<cap_type::SchedContext>(cap.object),
                         };
-
+                        if self.cpu_id == 1 {
+                            debug!("\tSC phase 2");
+                        }
                         let fault_ep = match obj.mcs_fault_ep() {
                             None => init_thread::slot::NULL.cap().cast::<cap_type::Endpoint>(),
                             Some(cap) => {
@@ -789,7 +855,9 @@ impl<'a> Initializer<'a> {
                                 }
                             },
                         };
-
+                        if self.cpu_id == 1 {
+                            debug!("Created fault endpoint");
+                        }
                         let temp_fault_ep = match obj.temp_fault_ep() {
                             None => init_thread::slot::NULL.cap().cast::<cap_type::Endpoint>(),
                             Some(cap) => {
@@ -805,7 +873,9 @@ impl<'a> Initializer<'a> {
                             sc,
                             fault_ep,
                         )?;
-
+                        if self.cpu_id == 1 {
+                            debug!("Set up scheduling params");
+                        }
                         tcb.tcb_set_timeout_endpoint(temp_fault_ep)?;
                     } else {
                         let fault_ep = sel4::CPtr::from_bits(obj.extra.master_fault_ep.as_ref().unwrap().to_sel4());
@@ -856,7 +926,10 @@ impl<'a> Initializer<'a> {
     }
 
     fn init_cspaces(&self) -> Result<()> {
-        debug!("Initializing CSpaces");
+        if self.cpu_id == 1 {
+            debug!("Initializing CSpaces");
+        }
+        
 
         for (obj_id, obj) in self.filter_objects::<object::ArchivedCNode>() {
             let cnode = self.orig_cap::<cap_type::CNode>(obj_id);
@@ -880,7 +953,6 @@ impl<'a> Initializer<'a> {
     }
 
     fn start_threads(&self) -> Result<()> {
-        info!("Starting threads");
         for (obj_id, obj) in self.filter_objects::<object::ArchivedTcb>() {
             let tcb = self.orig_cap::<cap_type::Tcb>(obj_id);
             if obj.extra.resume {

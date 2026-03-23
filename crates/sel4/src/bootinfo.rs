@@ -15,6 +15,8 @@ use sel4_config::sel4_cfg;
 
 use crate::{FrameObjectType, IpcBuffer, cap_type, init_thread::SlotRegion, newtype_methods, sys};
 
+#[allow(unused_imports)]
+use log::{debug, error, info, trace};
 /// A wrapped pointer to a [`BootInfo`] block.
 ///
 /// Access [`BootInfo`] via `Deref`, and [`BootInfoExtraIter`] via [`extra`](BootInfoPtr::extra).
@@ -154,6 +156,7 @@ pub struct BootInfoExtra<'a> {
 
 impl BootInfoExtra<'_> {
     pub fn content_with_header(&self) -> &[u8] {
+        debug!("header size: {}", mem::size_of::<sys::seL4_BootInfoHeader>());
         self.content_with_header
     }
 
@@ -217,6 +220,7 @@ impl<'a> Iterator for BootInfoExtraIter<'a> {
     type Item = BootInfoExtra<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        debug!("BootInfo len: {}", self.bootinfo.extra_slice().len());
         while self.cursor < self.bootinfo.extra_slice().len() {
             let header = {
                 let mut it = self.bootinfo.extra_slice()[self.cursor..]
@@ -225,6 +229,7 @@ impl<'a> Iterator for BootInfoExtraIter<'a> {
                     || sys::seL4_Word::from_ne_bytes(it.next().unwrap().try_into().unwrap());
                 let id = munch_word();
                 let len = munch_word();
+                debug!("id - {}, len - {}", id, len);
                 sys::seL4_BootInfoHeader { id, len }
             };
             let id = BootInfoExtraId::from_sys(header.id);
@@ -233,6 +238,9 @@ impl<'a> Iterator for BootInfoExtraIter<'a> {
             let content_with_header_end = content_with_header_start + len;
             self.cursor = content_with_header_end;
             if let Some(id) = id {
+                if id == BootInfoExtraId::Padding {
+                    continue;
+                }
                 return Some(BootInfoExtra {
                     id,
                     content_with_header: &self.bootinfo.extra_slice()

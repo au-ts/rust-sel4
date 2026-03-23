@@ -15,6 +15,8 @@ use sel4_config::sel4_cfg;
 
 use crate::{FrameObjectType, IpcBuffer, cap_type, init_thread::SlotRegion, newtype_methods, sys};
 
+#[allow(unused_imports)]
+use log::{debug, error, info, trace};
 /// A wrapped pointer to a [`BootInfo`] block.
 ///
 /// Access [`BootInfo`] via `Deref`, and [`BootInfoExtraIter`] via [`extra`](BootInfoPtr::extra).
@@ -154,6 +156,7 @@ pub struct BootInfoExtra<'a> {
 
 impl BootInfoExtra<'_> {
     pub fn content_with_header(&self) -> &[u8] {
+        debug!("header size: {}", mem::size_of::<sys::seL4_BootInfoHeader>());
         self.content_with_header
     }
 
@@ -167,6 +170,11 @@ impl BootInfoExtra<'_> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BootInfoExtraId {
     Padding,
+    X86Vbe,
+    X86Mbmmap,
+    X86AcpiRsdp,
+    X86FrameBuffer,
+    X86TscFreq,
     Fdt,
 }
 
@@ -174,6 +182,11 @@ impl BootInfoExtraId {
     pub fn from_sys(id: sys::seL4_BootInfoID::Type) -> Option<Self> {
         match id {
             sys::seL4_BootInfoID::SEL4_BOOTINFO_HEADER_PADDING => Some(BootInfoExtraId::Padding),
+            sys::seL4_BootInfoID::SEL4_BOOTINFO_HEADER_X86_VBE => Some(BootInfoExtraId::X86Vbe),
+            sys::seL4_BootInfoID::SEL4_BOOTINFO_HEADER_X86_MBMMAP => Some(BootInfoExtraId::X86Mbmmap),
+            sys::seL4_BootInfoID::SEL4_BOOTINFO_HEADER_X86_ACPI_RSDP => Some(BootInfoExtraId::X86AcpiRsdp),
+            sys::seL4_BootInfoID::SEL4_BOOTINFO_HEADER_X86_FRAMEBUFFER => Some(BootInfoExtraId::X86FrameBuffer),
+            sys::seL4_BootInfoID::SEL4_BOOTINFO_HEADER_X86_TSC_FREQ => Some(BootInfoExtraId::X86TscFreq),
             sys::seL4_BootInfoID::SEL4_BOOTINFO_HEADER_FDT => Some(BootInfoExtraId::Fdt),
             _ => None,
         }
@@ -199,6 +212,7 @@ impl<'a> Iterator for BootInfoExtraIter<'a> {
     type Item = BootInfoExtra<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        debug!("BootInfo len: {}", self.bootinfo.extra_slice().len());
         while self.cursor < self.bootinfo.extra_slice().len() {
             let header = {
                 let mut it = self.bootinfo.extra_slice()[self.cursor..]
@@ -207,6 +221,7 @@ impl<'a> Iterator for BootInfoExtraIter<'a> {
                     || sys::seL4_Word::from_ne_bytes(it.next().unwrap().try_into().unwrap());
                 let id = munch_word();
                 let len = munch_word();
+                debug!("id - {}, len - {}", id, len);
                 sys::seL4_BootInfoHeader { id, len }
             };
             let id = BootInfoExtraId::from_sys(header.id);
@@ -215,6 +230,9 @@ impl<'a> Iterator for BootInfoExtraIter<'a> {
             let content_with_header_end = content_with_header_start + len;
             self.cursor = content_with_header_end;
             if let Some(id) = id {
+                if id == BootInfoExtraId::Padding {
+                    continue;
+                }
                 return Some(BootInfoExtra {
                     id,
                     content_with_header: &self.bootinfo.extra_slice()

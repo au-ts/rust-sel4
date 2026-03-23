@@ -79,7 +79,6 @@ impl<'a> Initializer<'a> {
             untypedList: bootinfo.inner().untypedList.clone(),
         };
 
-
         Initializer {
             bootinfo,
             capdl_bootinfo,
@@ -219,15 +218,23 @@ impl<'a> Initializer<'a> {
                 let obj = &self.object(obj_id.into());
                 if let Some(blueprint) = obj.blueprint() {
                     by_size_end[blueprint.physical_size_bits()] += 1;
+                    // info!("id: {:?}, name: {:?}, by_size_end[{:?}]: {:?}", obj_id, self.named_object(obj_id.into()).name, blueprint.physical_size_bits(), by_size_end[blueprint.physical_size_bits()]);
                 }
             }
+            // info!("by_size_end[12]: {:?}", by_size_end[12]);
             let mut acc = first_obj_without_paddr;
             for (bits, n) in by_size_end.iter_mut().enumerate().rev() {
+                // info!("=====by_size_end: {:?}", *n);
                 by_size_start[bits] = acc;
                 acc += *n;
                 *n = acc;
+                // info!("by_size_start = {:?}, by_size_end[{:?}] = {:?}", by_size_start[bits], bits, *n);
             }
         }
+        // info!("by_size_end[12]: {:?}", by_size_end[12]);
+        //
+        info!("Vcpu bits: {:?}", sel4::sys::seL4_VCPUBits);
+        info!("Tcb bits: {:?}", sel4::sys::seL4_TCBBits);
 
         // In order to allocate objects which specify paddrs, we may have to
         // allocate dummies to manipulate watermarks. We must always retain at
@@ -235,6 +242,8 @@ impl<'a> Initializer<'a> {
         // its watermark will reset. This juggling approach is an easy way to
         // ensure that we are always holding such a reference.
         let mut hold_slots = HoldSlots::new(self.cslot_allocator, cslot_to_absolute_cptr)?;
+
+        info!("name: {:?}", self.named_object(1.into()).name);
 
         // Create root objects
 
@@ -246,7 +255,7 @@ impl<'a> Initializer<'a> {
             let ut_paddr_start = ut.paddr();
             let ut_paddr_end = ut_paddr_start + ut_size_bytes;
             let mut cur_paddr = ut_paddr_start;
-            trace!(
+            info!(
                 "Allocating from untyped: {:#x}..{:#x} (size_bits = {}, device = {:?})",
                 ut_paddr_start,
                 ut_paddr_end,
@@ -254,6 +263,7 @@ impl<'a> Initializer<'a> {
                 ut.is_device()
             );
             loop {
+                // target_paddr = paddr if paddr else ut_padd_end
                 let target = if next_obj_with_paddr < num_objs_with_paddr {
                     ut_paddr_end.min(
                         self.object(next_obj_with_paddr.into())
@@ -267,6 +277,9 @@ impl<'a> Initializer<'a> {
                     ut_paddr_end
                 };
                 let target_is_obj_with_paddr = target < ut_paddr_end;
+                info!("target paddr: {}", target);
+
+                // ut_cur_paddr < target_paddr
                 while cur_paddr < target {
                     let max_size_bits = usize::try_from(cur_paddr.trailing_zeros())
                         .unwrap()
@@ -287,10 +300,11 @@ impl<'a> Initializer<'a> {
                             }
                             // Create a largest possible object that would fit
                             if *obj_id < by_size_end[size_bits] {
+                                info!("obj_id: {:?}, by_size_end[{:?}]: {:?}", *obj_id, size_bits, by_size_end[size_bits]);
                                 let named_obj = &self.named_object((*obj_id).into());
                                 let blueprint = named_obj.object.blueprint().unwrap();
                                 assert_eq!(blueprint.physical_size_bits(), size_bits);
-                                trace!(
+                                info!(
                                     "Creating kernel object: paddr=0x{:x}, size_bits={} name={:?}",
                                     cur_paddr,
                                     blueprint.physical_size_bits(),
@@ -334,7 +348,7 @@ impl<'a> Initializer<'a> {
                     let obj_id = next_obj_with_paddr;
                     let named_obj = &self.named_object(obj_id.into());
                     let blueprint = named_obj.object.blueprint().unwrap();
-                    trace!(
+                    info!(
                         "Creating device object: paddr=0x{:x}, size_bits={} name={:?}",
                         cur_paddr,
                         blueprint.physical_size_bits(),
@@ -590,8 +604,11 @@ impl<'a> Initializer<'a> {
                     content_data.copy_out(dst);
                 }
                 ArchivedFillEntryContent::BootInfo(content_bootinfo) => {
+                    debug!("====fill bootinfo!=====");
                     for extra in self.bootinfo.extra() {
                         if extra.id == content_bootinfo.id.to_sel4() {
+                            debug!("sel4 bootinfo len: {}", extra.content_with_header().len());
+                            debug!("fill bootinfo extra.id {:?}", extra.id);
                             let n =
                                 dst.len()
                                     .min(extra.content_with_header().len().saturating_sub(
@@ -1130,6 +1147,7 @@ fn init_thread_cnode_absolute_cptr() -> sel4::AbsoluteCPtr {
 }
 
 fn object_name(named_obj: &ArchivedNamedObject<FrameInit>) -> Option<&str> {
+    info!("name: {:?}", named_obj.name);
     named_obj.name.as_ref().map(|x| x.as_str())
 }
 

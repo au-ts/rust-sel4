@@ -7,6 +7,9 @@
 use core::ops::Range;
 use core::ptr;
 
+#[allow(unused_imports)]
+use log::{debug, error, info, trace};
+
 use sel4::{CapTypeForFrameObjectOfFixedSize, cap_type, init_thread, sel4_cfg_attr, sel4_cfg_bool};
 
 const SMALL_PAGE_PLACEHOLDER_SIZE: usize = if sel4_cfg_bool!(ARCH_AARCH32) {
@@ -45,6 +48,7 @@ impl CopyAddrs {
             }
             addr
         };
+        debug!("smaller: 0x{:x}", smaller_frame_copy_addr);
         let larger_frame_copy_addr = {
             let level = sel4::vspace_levels::NUM_LEVELS - 2;
             let outer_span = 1u64 << sel4::vspace_levels::span_bits(level);
@@ -62,6 +66,7 @@ impl CopyAddrs {
                 (_, _) => addr_space_footprint.end.next_multiple_of(inner_span),
             }
         };
+        debug!("larger: 0x{:x}", larger_frame_copy_addr);
         Ok(Self {
             smaller_frame_copy_addr,
             larger_frame_copy_addr,

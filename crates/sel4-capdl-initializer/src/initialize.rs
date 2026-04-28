@@ -18,7 +18,7 @@ use log::{debug, error, info, trace};
 
 use sel4::{
     CapRights, CapTypeForFrameObjectOfFixedSize, cap_type,
-    init_thread::{self, Slot},
+    init_thread::{self, Slot, SlotRegion},
 };
 use sel4_capdl_initializer_types::*;
 
@@ -29,8 +29,19 @@ use crate::memory::{CopyAddrs, get_user_image_frame_slot};
 
 type Result<T> = CoreResult<T, CapDLInitializerError>;
 
+#[repr(C)]
+pub struct CapDLBootInfo {
+    untypeds: SlotRegion<cap_type::Untyped>,
+    // TODO: figure out the size of this, might have more untypeds after splitting? and where to
+    // allocate
+    #[allow(non_snake_case)]
+    untypedList: [sel4::sys::seL4_UntypedDesc; sel4::sel4_cfg_usize!(MAX_NUM_BOOTINFO_UNTYPED_CAPS)],
+    // TODO: add watermark tracking
+}
+
 pub struct Initializer<'a> {
     bootinfo: &'a sel4::BootInfoPtr,
+    capdl_bootinfo: CapDLBootInfo,
     user_image_bounds: Range<usize>,
     copy_addrs: CopyAddrs,
     spec: &'a <SpecForInitializer as Archive>::Archived,
@@ -63,8 +74,15 @@ impl<'a> Initializer<'a> {
             )
             .unwrap();
 
+        let capdl_bootinfo = CapDLBootInfo {
+            untypeds: bootinfo.untyped(),
+            untypedList: bootinfo.inner().untypedList.clone(),
+        };
+
+
         Initializer {
             bootinfo,
+            capdl_bootinfo,
             user_image_bounds,
             copy_addrs,
             spec,
@@ -89,6 +107,7 @@ impl<'a> Initializer<'a> {
         self.init_asids()?;
         self.init_frames()?;
         self.init_vspaces()?;
+        self.init_untypeds_cnode()?;
 
         sel4::sel4_cfg_if! {
             if #[sel4_cfg(KERNEL_MCS)] {
@@ -616,6 +635,31 @@ impl<'a> Initializer<'a> {
         }
         Ok(())
     }
+
+    fn init_untypeds_cnode(&mut self) -> Result<()> {
+        debug!("Init untypeds cnode");
+
+        for (obj_id, obj) in self.filter_objects::<object::ArchivedCNode>() {
+            if obj.receive_all_untypeds {
+                // TODO: check if slot 0 need to point to itself
+
+                let untypeds_cnode_cptr_init = self.orig_cap::<cap_type::CNode>(obj_id);
+                for (ut_idx, ut) in self.bootinfo.untyped_list().iter().enumerate() {
+                    // insert untyped cap to cnode from slot 1
+                    let _ = untypeds_cnode_cptr_init.absolute_cptr_from_bits_with_depth((ut_idx + 1) as u64, obj.size_bits as usize).move_(
+                        &init_thread::slot::CNODE.cap().absolute_cptr_from_bits_with_depth(self.ut_cap(ut_idx).bits(), sel4::WORD_SIZE)
+                    ).inspect_err(|e| panic!("Failed to copy untypeds {}", e));
+
+                    // capdl_bootinfo.untypedList[(ut_idx + 1) as usize] = ut.inner().clone();
+                }
+
+
+            }
+        }
+
+        Ok(())
+    }
+
 
     #[sel4::sel4_cfg(all(ARCH_X86_64, VTX))]
     fn init_vspace_x86_ept(

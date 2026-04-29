@@ -8,6 +8,7 @@ use core::array;
 use core::ops::Range;
 use core::result::Result as CoreResult;
 use core::slice;
+use core::mem;
 
 use rkyv::Archive;
 use rkyv::ops::ArchivedRange;
@@ -606,6 +607,7 @@ impl<'a> Initializer<'a> {
                 ArchivedFillEntryContent::BootInfo(content_bootinfo) => {
                     debug!("====fill bootinfo!=====");
                     for extra in self.bootinfo.extra() {
+                        debug!("extra id: {:?}", extra.id);
                         if extra.id == content_bootinfo.id.to_sel4() {
                             debug!("sel4 bootinfo len: {}", extra.content_with_header().len());
                             debug!("fill bootinfo extra.id {:?}", extra.id);
@@ -622,6 +624,16 @@ impl<'a> Initializer<'a> {
                                 );
                             }
                         }
+                    }
+                    if content_bootinfo.id.to_sel4() == sel4::BootInfoExtraId::RemainingUntypeds {
+                        debug!("Need to fill remaining untypeds here\n");
+                        let p = &self.capdl_bootinfo as *const CapDLBootInfo as *const u8;
+                        let capdl_bootinfo_slice = unsafe { slice::from_raw_parts(p, mem::size_of::<CapDLBootInfo>()) };
+                        // TODO: double-check the logic here
+                        let n = dst.len().min(mem::size_of::<CapDLBootInfo>());
+                        dst[..n].copy_from_slice(capdl_bootinfo_slice);
+                        debug!("bootinfo start: {}, end: {}", self.capdl_bootinfo.untypeds.start(), self.capdl_bootinfo.untypeds.end());
+                        debug!("untyped {}, paddr: {}", 83, self.capdl_bootinfo.untypedList[1].paddr);
                     }
                 }
             }

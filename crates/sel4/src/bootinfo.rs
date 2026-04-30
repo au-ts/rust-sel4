@@ -176,6 +176,7 @@ pub enum BootInfoExtraId {
     X86FrameBuffer,
     X86TscFreq,
     Fdt,
+    RemainingUntypeds,
 }
 
 impl BootInfoExtraId {
@@ -221,7 +222,6 @@ impl<'a> Iterator for BootInfoExtraIter<'a> {
                     || sys::seL4_Word::from_ne_bytes(it.next().unwrap().try_into().unwrap());
                 let id = munch_word();
                 let len = munch_word();
-                debug!("id - {}, len - {}", id, len);
                 sys::seL4_BootInfoHeader { id, len }
             };
             let id = BootInfoExtraId::from_sys(header.id);

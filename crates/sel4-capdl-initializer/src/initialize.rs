@@ -76,7 +76,7 @@ impl<'a> Initializer<'a> {
             .unwrap();
 
         let capdl_bootinfo = CapDLBootInfo {
-            untypeds: bootinfo.untyped(),
+            untypeds: SlotRegion::<cap_type::Untyped>::from_range(1..bootinfo.untyped().len()+1),
             untypedList: bootinfo.inner().untypedList.clone(),
         };
 
@@ -671,7 +671,6 @@ impl<'a> Initializer<'a> {
         for (obj_id, obj) in self.filter_objects::<object::ArchivedCNode>() {
             if obj.receive_all_untypeds {
                 // TODO: check if slot 0 need to point to itself
-
                 let untypeds_cnode_cptr_init = self.orig_cap::<cap_type::CNode>(obj_id);
                 for (ut_idx, ut) in self.bootinfo.untyped_list().iter().enumerate() {
                     // insert untyped cap to cnode from slot 1
@@ -680,9 +679,9 @@ impl<'a> Initializer<'a> {
                     ).inspect_err(|e| panic!("Failed to copy untypeds {}", e));
 
                     // capdl_bootinfo.untypedList[(ut_idx + 1) as usize] = ut.inner().clone();
+                    // debug!("untypeds_cnode_cptr_init: {:?}", untypeds_cnode_cptr_init);
+                    debug!("ut_idx: {}", ut_idx);
                 }
-
-
             }
         }
 

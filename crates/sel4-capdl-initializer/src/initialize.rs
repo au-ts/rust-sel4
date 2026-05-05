@@ -103,11 +103,11 @@ impl<'a> Initializer<'a> {
     fn run(&mut self) -> Result<()> {
         self.create_objects()?;
 
+        self.init_untypeds_cnode()?;
         self.init_irqs()?;
         self.init_asids()?;
         self.init_frames()?;
         self.init_vspaces()?;
-        self.init_untypeds_cnode()?;
 
         sel4::sel4_cfg_if! {
             if #[sel4_cfg(KERNEL_MCS)] {
@@ -670,7 +670,6 @@ impl<'a> Initializer<'a> {
 
         for (obj_id, obj) in self.filter_objects::<object::ArchivedCNode>() {
             if obj.receive_all_untypeds {
-                // TODO: check if slot 0 need to point to itself
                 let untypeds_cnode_cptr_init = self.orig_cap::<cap_type::CNode>(obj_id);
                 for (ut_idx, ut) in self.bootinfo.untyped_list().iter().enumerate() {
                     // insert untyped cap to cnode from slot 1
@@ -678,9 +677,7 @@ impl<'a> Initializer<'a> {
                         &init_thread::slot::CNODE.cap().absolute_cptr_from_bits_with_depth(self.ut_cap(ut_idx).bits(), sel4::WORD_SIZE)
                     ).inspect_err(|e| panic!("Failed to copy untypeds {}", e));
 
-                    // capdl_bootinfo.untypedList[(ut_idx + 1) as usize] = ut.inner().clone();
-                    // debug!("untypeds_cnode_cptr_init: {:?}", untypeds_cnode_cptr_init);
-                    debug!("ut_idx: {}", ut_idx);
+                    self.capdl_bootinfo.untypedList[(ut_idx + 1) as usize] = ut.inner().clone();
                 }
             }
         }

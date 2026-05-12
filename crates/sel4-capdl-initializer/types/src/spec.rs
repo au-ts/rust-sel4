@@ -105,6 +105,8 @@ pub struct CapTableEntry {
 pub struct Spec<D> {
     pub objects: Vec<NamedObject<D>>,
     pub irqs: Vec<IrqEntry>,
+    // Only if cpu == 0
+    pub multikernel_irq_set_target_cores: Vec<IrqMultikernelSetTargetCore>,
     pub asid_slots: Vec<AsidSlotEntry>,
     pub root_objects: Range<ObjectId>,
     pub untyped_covers: Vec<UntypedCover>,
@@ -139,6 +141,14 @@ impl From<Word> for u64 {
 pub struct IrqEntry {
     pub irq: Word,
     pub handler: ObjectId,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(rkyv::Archive, rkyv::Deserialize, rkyv::Serialize)]
+pub struct IrqMultikernelSetTargetCore {
+    pub irq: Word,
+    pub target_cpu: u8,
 }
 
 pub type AsidSlotEntry = ObjectId;

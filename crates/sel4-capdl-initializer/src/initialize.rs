@@ -395,6 +395,19 @@ impl<'a> Initializer<'a> {
             }
         }
 
+        // Set target core for any IRQs. Only done on Core0, for multikernel
+        {
+            for ArchivedIrqMultikernelSetTargetCore { irq, target_cpu } in
+                self.spec.multikernel_irq_set_target_cores.iter()
+            {
+                // Only doable on core 0.
+                assert!(self.spec.cpu_id == 0);
+                init_thread::slot::IRQ_CONTROL
+                    .cap()
+                    .irq_control_set_irq_target_core(irq.to_sel4(), (*target_cpu).into())?;
+            }
+        }
+
         // Create IrqHandler caps
         {
             for ArchivedIrqEntry { irq, handler } in self.spec.irqs.iter() {

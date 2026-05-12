@@ -118,6 +118,7 @@ impl<D> Spec<D> {
                 })
                 .collect::<Result<_, E>>()?,
             irqs: self.irqs.clone(),
+            multikernel_irq_set_target_cores: self.multikernel_irq_set_target_cores.clone(),
             asid_slots: self.asid_slots.clone(),
             root_objects: self.root_objects.clone(),
             untyped_covers: self.untyped_covers.clone(),

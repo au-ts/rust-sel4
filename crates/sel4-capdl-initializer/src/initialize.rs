@@ -502,9 +502,12 @@ impl<'a> Initializer<'a> {
             let slot = self.orig_cslot(obj_id);
             init_thread::slot::IRQ_CONTROL
                 .cap()
-                .irq_control_issue_sgi_signal(irq.to_sel4(), target.to_sel4(), &cslot_to_absolute_cptr(slot))?;
+                .irq_control_issue_sgi_signal(
+                    irq.to_sel4(),
+                    target.to_sel4(),
+                    &cslot_to_absolute_cptr(slot),
+                )?;
         }
-
 
         Ok(())
     }
@@ -571,7 +574,7 @@ impl<'a> Initializer<'a> {
         if self.cpu_id == 1 {
             debug!("Initializing Frames");
         }
-        
+
         for (obj_id, obj) in self.filter_objects::<object::ArchivedFrame<_>>() {
             // TODO make more platform-agnostic
             if let ArchivedFrameInit::Fill(fill) = &obj.init
@@ -637,7 +640,7 @@ impl<'a> Initializer<'a> {
         if self.cpu_id == 1 {
             debug!("Initializing VSpaces");
         }
-        
+
         for (obj_id, obj) in
             self.filter_objects_with::<object::ArchivedPageTable>(|obj| obj.is_root)
         {
@@ -729,7 +732,7 @@ impl<'a> Initializer<'a> {
         if self.cpu_id == 1 {
             debug!("Initializing scheduling contexts");
         }
-        
+
         for (obj_id, _obj) in self.filter_objects::<object::ArchivedSchedContext>() {
             self.init_sched_context(obj_id, 0)?;
         }
@@ -764,7 +767,7 @@ impl<'a> Initializer<'a> {
         if self.cpu_id == 1 {
             debug!("Initializing TCBs");
         }
-        
+
         let tcbs = self.filter_objects::<object::ArchivedTcb>();
         // debug!("This is the number of TCBs: {:?} and reuse a {}", tcbs.size_hint(), a);
 
@@ -773,7 +776,7 @@ impl<'a> Initializer<'a> {
             if self.cpu_id == 1 {
                 debug!("Setting up a TCB!");
             }
-            
+
             if let Some(bound_notification) = obj.bound_notification() {
                 let bound_notification =
                     self.orig_cap::<cap_type::Notification>(bound_notification.object);
@@ -942,7 +945,6 @@ impl<'a> Initializer<'a> {
         if self.cpu_id == 1 {
             debug!("Initializing CSpaces");
         }
-        
 
         for (obj_id, obj) in self.filter_objects::<object::ArchivedCNode>() {
             let cnode = self.orig_cap::<cap_type::CNode>(obj_id);
@@ -1044,9 +1046,7 @@ impl<'a> Initializer<'a> {
                     }
                 }
             }
-            ArchivedObject::DomainSet => {
-                init_thread::slot::DOMAIN_SET.upcast()
-            }
+            ArchivedObject::DomainSet => init_thread::slot::DOMAIN_SET.upcast(),
             ArchivedObject::Frame(object::ArchivedFrame {
                 init: ArchivedFrameInit::Embedded(embedded),
                 ..

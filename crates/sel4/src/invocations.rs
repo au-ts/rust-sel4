@@ -330,7 +330,12 @@ impl<C: InvocationContext> IrqControl<C> {
 
     /// Corresponds to `seL4_IRQControl_IssueSGISignal`
     #[sel4_cfg(all(ARCH_AARCH64, not(ENABLE_SMP_SUPPORT)))]
-    pub fn irq_control_issue_sgi_signal(self, irq: Word, target: Word, dst: &AbsoluteCPtr) -> Result<()> {
+    pub fn irq_control_issue_sgi_signal(
+        self,
+        irq: Word,
+        target: Word,
+        dst: &AbsoluteCPtr,
+    ) -> Result<()> {
         Error::wrap(self.invoke(|cptr, ipc_buffer| {
             ipc_buffer.inner_mut().seL4_IRQControl_IssueSGISignal(
                 cptr.bits(),
@@ -347,11 +352,9 @@ impl<C: InvocationContext> IrqControl<C> {
     #[sel4_cfg(all(ARCH_AARCH64, ENABLE_MULTIKERNEL_SUPPORT))]
     pub fn irq_control_set_irq_target_core(self, irq: Word, target: Word) -> Result<()> {
         Error::wrap(self.invoke(|cptr, ipc_buffer| {
-            ipc_buffer.inner_mut().seL4_IRQControl_SetIrqTargetCore(
-                cptr.bits(),
-                irq,
-                target,
-            )
+            ipc_buffer
+                .inner_mut()
+                .seL4_IRQControl_SetIrqTargetCore(cptr.bits(), irq, target)
         }))
     }
 }
@@ -386,11 +389,9 @@ impl<C: InvocationContext> IrqHandler<C> {
 impl<C: InvocationContext> DomainSet<C> {
     pub fn domain_set(self, domain: u8, thread: Tcb) -> Result<()> {
         Error::wrap(self.invoke(|cptr, ipc_buffer| {
-            ipc_buffer.inner_mut().seL4_DomainSet_Set(
-                cptr.bits(),
-                domain,
-                thread.bits(),
-            )
+            ipc_buffer
+                .inner_mut()
+                .seL4_DomainSet_Set(cptr.bits(), domain, thread.bits())
         }))
     }
 }

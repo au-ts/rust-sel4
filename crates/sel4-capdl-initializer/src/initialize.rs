@@ -76,7 +76,7 @@ impl<'a> Initializer<'a> {
             .unwrap();
 
         let capdl_bootinfo = CapDLBootInfo {
-            untypeds: SlotRegion::<cap_type::Untyped>::from_range(1..bootinfo.untyped().len()+1),
+            untypeds: SlotRegion::<cap_type::Untyped>::from_range(2..bootinfo.untyped().len()+2),
             untypedList: bootinfo.inner().untypedList.clone(),
         };
 
@@ -671,13 +671,19 @@ impl<'a> Initializer<'a> {
         for (obj_id, obj) in self.filter_objects::<object::ArchivedCNode>() {
             if obj.receive_all_untypeds {
                 let untypeds_cnode_cptr_init = self.orig_cap::<cap_type::CNode>(obj_id);
-                for (ut_idx, ut) in self.bootinfo.untyped_list().iter().enumerate() {
-                    // insert untyped cap to cnode from slot 1
-                    let _ = untypeds_cnode_cptr_init.absolute_cptr_from_bits_with_depth((ut_idx + 1) as u64, obj.size_bits as usize).move_(
-                        &init_thread::slot::CNODE.cap().absolute_cptr_from_bits_with_depth(self.ut_cap(ut_idx).bits(), sel4::WORD_SIZE)
-                    ).inspect_err(|e| panic!("Failed to copy untypeds {}", e));
+                let irq_control_src = &init_thread::slot::CNODE.cap().absolute_cptr(init_thread::slot::IRQ_CONTROL.cap());
+                let irq_control_dest = untypeds_cnode_cptr_init.absolute_cptr_from_bits_with_depth(1, obj.size_bits as usize);
+                // let rights = CapRights::all();
+                // let _ = irq_control_dest.copy(irq_control_src, rights);
+                let _ = irq_control_dest.move_(irq_control_src);
 
-                    self.capdl_bootinfo.untypedList[(ut_idx + 1) as usize] = ut.inner().clone();
+                for (ut_idx, ut) in self.bootinfo.untyped_list().iter().enumerate() {
+                    // insert untyped cap to cnode from slot 2
+                    let src = &init_thread::slot::CNODE.cap().absolute_cptr_from_bits_with_depth(self.ut_cap(ut_idx).bits(), sel4::WORD_SIZE);
+                    let dest = untypeds_cnode_cptr_init.absolute_cptr_from_bits_with_depth((ut_idx + 2) as u64, obj.size_bits as usize);
+                    let _ = dest.move_(src).inspect_err(|e| panic!("Failed to copy untypeds {}", e));
+
+                    self.capdl_bootinfo.untypedList[(ut_idx + 2) as usize] = ut.inner().clone();
                 }
             }
         }

@@ -8,6 +8,7 @@ use core::array;
 use core::ops::Range;
 use core::result::Result as CoreResult;
 use core::slice;
+use core::cmp::min;
 
 use rkyv::Archive;
 use rkyv::ops::ArchivedRange;
@@ -28,6 +29,45 @@ use crate::hold_slots::HoldSlots;
 use crate::memory::{CopyAddrs, get_user_image_frame_slot};
 
 type Result<T> = CoreResult<T, CapDLInitializerError>;
+
+pub fn paddr_to_kernel_vaddr(paddr: u64) -> u64 {
+    paddr.wrapping_add(virtual_base())
+}
+
+pub fn kernel_vaddr_to_paddr(vaddr: u64) -> u64 {
+    vaddr.wrapping_sub(virtual_base())
+}
+
+pub fn msb(x: u64) -> u64 {
+    64 - x.leading_zeros() as u64 - 1
+}
+
+pub fn lsb(x: u64) -> u64 {
+    x.trailing_zeros() as u64
+}
+
+fn virtual_base() -> u64 {
+    /// Refer to `#define PPTR_BASE` in seL4 source
+    sel4::sel4_cfg_if! {
+        if #[sel4_cfg(ARCH_X86)] { // todo check define
+            return 0xE0000000;
+        } else if #[sel4_cfg(ARCH_X86_64)] {
+            return 0xFFFFFF8000000000;
+        } else if #[sel4_cfg(all(ARCH_AARCH64, ARM_HYPERVISOR_SUPPORT))] { // todo check define
+            return 0xFFFFFF8000000000;
+        } else if #[sel4_cfg(all(ARCH_AARCH64, not(ARM_HYPERVISOR_SUPPORT)))] { // todo check define
+            return 0x0000008000000000;
+        } else if #[sel4_cfg(ARCH_AARCH32)] {
+            todo!("it's platform not arch dependant");
+        } else if #[sel4_cfg(ARCH_RISCV64)] { // check define
+            return 0xFFFFFFC000000000;
+        } else if #[sel4_cfg(ARCH_RISCV32)] {
+            todo!("it's platform not arch dependant");
+        } else {
+            unreachable!("uh oh");
+        }
+    }
+}
 
 pub struct Initializer<'a> {
     bootinfo: &'a sel4::BootInfoPtr,
@@ -249,9 +289,11 @@ impl<'a> Initializer<'a> {
                 };
                 let target_is_obj_with_paddr = target < ut_paddr_end;
                 while cur_paddr < target {
-                    let max_size_bits = usize::try_from(cur_paddr.trailing_zeros())
+                    let target_vaddr = paddr_to_kernel_vaddr(target as u64) as usize;
+                    let cur_vaddr = paddr_to_kernel_vaddr(cur_paddr as u64) as usize;
+                    let max_size_bits = usize::try_from(cur_vaddr.trailing_zeros())
                         .unwrap()
-                        .min((target - cur_paddr).trailing_zeros().try_into().unwrap());
+                        .min((target_vaddr - cur_vaddr).trailing_zeros().try_into().unwrap());
                     let mut created = false;
                     if !ut.is_device() {
                         for size_bits in (0..=max_size_bits).rev() {

@@ -18,7 +18,7 @@ use rkyv::option::ArchivedOption;
 use log::{debug, error, info, trace};
 
 use sel4::{
-    CapRights, CapTypeForFrameObjectOfFixedSize, WORD_SIZE, cap_type,
+    CapRights, CapTypeForFrameObjectOfFixedSize, cap_type,
     init_thread::{self, Slot, SlotRegion},
 };
 use sel4_capdl_initializer_types::*;
@@ -283,9 +283,7 @@ impl<'a> Initializer<'a> {
                 // ut_cur_paddr < target_paddr
                 while cur_paddr < target {
                     let max_size_bits = {
-                        let alignment_bits = (cur_paddr - ut_paddr_start)
-                            .checked_ilog2()
-                            .unwrap_or(WORD_SIZE.try_into().unwrap());
+                        let alignment_bits = (cur_paddr - ut_paddr_start).trailing_zeros();
                         let distance_bits = (target - cur_paddr).checked_ilog2().expect("never 0");
                         alignment_bits.min(distance_bits).try_into().unwrap()
                     };

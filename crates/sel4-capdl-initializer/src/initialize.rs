@@ -18,7 +18,7 @@ use rkyv::option::ArchivedOption;
 use log::{debug, error, info, trace};
 
 use sel4::{
-    CapRights, CapTypeForFrameObjectOfFixedSize, WORD_SIZE, cap_type,
+    CapRights, CapTypeForFrameObjectOfFixedSize, cap_type,
     init_thread::{self, Slot, SlotRegion},
 };
 use sel4_capdl_initializer_types::*;

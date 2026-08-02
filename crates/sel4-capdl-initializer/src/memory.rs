@@ -48,7 +48,6 @@ impl CopyAddrs {
             }
             addr
         };
-        debug!("smaller: 0x{:x}", smaller_frame_copy_addr);
         let larger_frame_copy_addr = {
             let level = sel4::vspace_levels::NUM_LEVELS - 2;
             let outer_span = 1u64 << sel4::vspace_levels::span_bits(level);
@@ -66,7 +65,6 @@ impl CopyAddrs {
                 (_, _) => addr_space_footprint.end.next_multiple_of(inner_span),
             }
         };
-        debug!("larger: 0x{:x}", larger_frame_copy_addr);
         Ok(Self {
             smaller_frame_copy_addr,
             larger_frame_copy_addr,

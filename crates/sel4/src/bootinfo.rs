@@ -221,7 +221,6 @@ impl<'a> Iterator for BootInfoExtraIter<'a> {
     type Item = BootInfoExtra<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        debug!("BootInfo len: {}", self.bootinfo.extra_slice().len());
         while self.cursor < self.bootinfo.extra_slice().len() {
             let header = {
                 let mut it = self.bootinfo.extra_slice()[self.cursor..]

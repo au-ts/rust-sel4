@@ -101,7 +101,7 @@ pub enum FillEntryContentBootInfoId {
     X86FrameBuffer,
     X86TscFreq,
     Fdt,
-    RemainingUntypeds,
+    PostCapDLUntypeds,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]

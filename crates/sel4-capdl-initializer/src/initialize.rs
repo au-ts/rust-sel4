@@ -298,7 +298,6 @@ impl<'a> Initializer<'a> {
                             }
                             // Create a largest possible object that would fit
                             if *obj_id < by_size_end[size_bits] {
-                                info!("obj_id: {:?}, by_size_end[{:?}]: {:?}", *obj_id, size_bits, by_size_end[size_bits]);
                                 let named_obj = &self.named_object((*obj_id).into());
                                 let blueprint = named_obj.object.blueprint().unwrap();
                                 assert_eq!(blueprint.physical_size_bits(), size_bits);
@@ -618,7 +617,7 @@ impl<'a> Initializer<'a> {
                             }
                         }
                     }
-                    if content_bootinfo.id.to_sel4() == sel4::BootInfoExtraId::RemainingUntypeds {
+                    if content_bootinfo.id.to_sel4() == sel4::BootInfoExtraId::PostCapDLUntypeds {
                         let p = &self.capdl_bootinfo as *const CapDLBootInfo as *const u8;
                         let capdl_bootinfo_slice = unsafe { slice::from_raw_parts(p, mem::size_of::<CapDLBootInfo>()) };
                         // TODO: double-check the logic here
@@ -656,7 +655,7 @@ impl<'a> Initializer<'a> {
     }
 
     fn init_untypeds_cnode(&mut self) -> Result<()> {
-        debug!("Init untypeds cnode");
+        info!("Init untypeds cnode");
 
         for (obj_id, obj) in self.filter_objects::<object::ArchivedCNode>() {
             if obj.receive_all_untypeds {

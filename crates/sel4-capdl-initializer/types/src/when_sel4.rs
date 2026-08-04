@@ -139,7 +139,7 @@ impl ArchivedFillEntryContentBootInfoId {
             Self::X86FrameBuffer => sel4::BootInfoExtraId::X86FrameBuffer,
             Self::X86TscFreq => sel4::BootInfoExtraId::X86TscFreq,
             Self::Fdt => sel4::BootInfoExtraId::Fdt,
-            Self::RemainingUntypeds => sel4::BootInfoExtraId::RemainingUntypeds,
+            Self::PostCapDLUntypeds => sel4::BootInfoExtraId::PostCapDLUntypeds,
         }
     }
 }

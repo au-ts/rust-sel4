@@ -156,7 +156,6 @@ pub struct BootInfoExtra<'a> {
 
 impl BootInfoExtra<'_> {
     pub fn content_with_header(&self) -> &[u8] {
-        debug!("header size: {}", mem::size_of::<sys::seL4_BootInfoHeader>());
         self.content_with_header
     }
 
@@ -176,7 +175,7 @@ pub enum BootInfoExtraId {
     X86FrameBuffer,
     X86TscFreq,
     Fdt,
-    RemainingUntypeds,
+    PostCapDLUntypeds,
 }
 
 impl BootInfoExtraId {

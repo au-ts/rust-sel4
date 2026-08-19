@@ -28,6 +28,8 @@ impl<D: Archive> ArchivedObject<D> {
                 ArchivedObject::Tcb(_) => ObjectBlueprint::Tcb,
                 #[sel4_cfg(any(all(ARCH_ARM, ARM_HYPERVISOR_SUPPORT), all(ARCH_X86_64, VTX)))]
                 ArchivedObject::VCpu => sel4::ObjectBlueprintArch::VCpu.into(),
+                // TODO: Make this an aarch64 only thing.
+                ArchivedObject::Vpmu => ObjectBlueprint::Vpmu,
                 ArchivedObject::Frame(obj) => sel4::FrameObjectType::from_bits(obj.size_bits.into()).unwrap().blueprint(),
                 #[sel4_cfg(ARCH_AARCH64)]
                 ArchivedObject::PageTable(obj) => {

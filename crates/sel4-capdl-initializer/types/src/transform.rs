@@ -114,6 +114,7 @@ impl<D> Spec<D> {
                             Object::Reply => Object::Reply,
                             Object::ArmSmc => Object::ArmSmc,
                             Object::DomainSet => Object::DomainSet,
+                            Object::Vpmu => Object::Vpmu,
                         },
                     })
                 })

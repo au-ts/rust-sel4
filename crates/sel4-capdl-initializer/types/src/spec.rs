@@ -198,6 +198,7 @@ pub enum Object<D> {
     Tcb(object::Tcb),
     Irq(object::Irq),
     VCpu,
+    Vpmu,
     Frame(object::Frame<D>),
     PageTable(object::PageTable),
     AsidPool(object::AsidPool),
@@ -292,6 +293,7 @@ pub enum Cap {
     Tcb(cap::Tcb),
     IrqHandler(cap::IrqHandler),
     VCpu(cap::VCpu),
+    Vpmu(cap::Vpmu),
     Frame(cap::Frame),
     PageTable(cap::PageTable),
     AsidPool(cap::AsidPool),
@@ -341,6 +343,7 @@ impl Cap {
             Self::Reply(cap) => cap.object,
             Self::ArmSmc(cap) => cap.object,
             Self::DomainSet(cap) => cap.object,
+            Self::Vpmu(cap) => cap.object,
         }
     }
 
@@ -367,6 +370,7 @@ impl Cap {
             Self::Reply(cap) => cap.object = object,
             Self::ArmSmc(cap) => cap.object = object,
             Self::DomainSet(cap) => cap.object = object,
+            Self::Vpmu(cap) => cap.object = object,
         }
     }
 }
@@ -403,6 +407,7 @@ impl ArchivedCap {
             Self::Reply(cap) => cap.object,
             Self::ArmSmc(cap) => cap.object,
             Self::DomainSet(cap) => cap.object,
+            Self::Vpmu(cap) => cap.object,
         }
     }
 }
@@ -787,6 +792,13 @@ pub mod cap {
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     #[derive(rkyv::Archive, rkyv::Serialize)]
     pub struct DomainSet {
+        pub object: ObjectId,
+    }
+
+    #[derive(Debug, Clone, Eq, PartialEq, IsCap)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[derive(rkyv::Archive, rkyv::Serialize)]
+    pub struct Vpmu {
         pub object: ObjectId,
     }
 }

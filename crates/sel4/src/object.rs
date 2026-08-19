@@ -32,6 +32,7 @@ pub enum ObjectType {
     #[sel4_cfg(KERNEL_MCS)]
     Reply,
     Arch(ObjectTypeArch),
+    Vpmu,
 }
 
 impl ObjectType {
@@ -48,6 +49,7 @@ impl ObjectType {
                 #[sel4_cfg(KERNEL_MCS)]
                 Self::Reply => sys::api_object::seL4_ReplyObject,
                 Self::Arch(arch) => arch.into_sys(),
+                Self::Vpmu => sys::_object::seL4_ARM_VPMUObject,
             }
         }
     }
@@ -79,6 +81,7 @@ pub enum ObjectBlueprint {
     #[sel4_cfg(KERNEL_MCS)]
     Reply,
     Arch(ObjectBlueprintArch),
+    Vpmu,
 }
 
 impl ObjectBlueprint {
@@ -95,6 +98,7 @@ impl ObjectBlueprint {
                 #[sel4_cfg(KERNEL_MCS)]
                 Self::Reply => ObjectType::Reply,
                 Self::Arch(arch) => ObjectType::Arch(arch.ty()),
+                Self::Vpmu => ObjectType::Vpmu,
             }
         }
     }
@@ -124,6 +128,7 @@ impl ObjectBlueprint {
                 #[sel4_cfg(KERNEL_MCS)]
                 Self::Reply => u32_into_usize(sys::seL4_ReplyBits),
                 Self::Arch(arch) => arch.physical_size_bits(),
+                Self::Vpmu => u32_into_usize(sys::seL4_VPMUBits),
             }
         }
     }

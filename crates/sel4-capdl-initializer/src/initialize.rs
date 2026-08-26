@@ -77,7 +77,7 @@ impl<'a> Initializer<'a> {
 
         let capdl_bootinfo = CapDLBootInfo {
             untypeds: SlotRegion::<cap_type::Untyped>::from_range(2..bootinfo.untyped().len()+2),
-            untypedList: bootinfo.inner().untypedList.clone(),
+            untypedList: [sel4::sys::seL4_UntypedDesc {..Default::default() }; sel4::sel4_cfg_usize!(MAX_NUM_BOOTINFO_UNTYPED_CAPS)],
         };
 
         Initializer {
@@ -251,6 +251,7 @@ impl<'a> Initializer<'a> {
             let ut_paddr_start = ut.paddr();
             let ut_paddr_end = ut_paddr_start + ut_size_bytes;
             let mut cur_paddr = ut_paddr_start;
+            let mut ut_paddr_updated = ut_paddr_start;
             trace!(
                 "Allocating from untyped: {:#x}..{:#x} (size_bits = {}, device = {:?})",
                 ut_paddr_start,
@@ -314,6 +315,7 @@ impl<'a> Initializer<'a> {
                                     1,
                                 )?;
                                 cur_paddr += 1 << size_bits;
+                                ut_paddr_updated = cur_paddr;
                                 *obj_id += 1;
                                 created = true;
                                 break;
@@ -336,7 +338,47 @@ impl<'a> Initializer<'a> {
                             )?;
                             hold_slots.report_used();
                             cur_paddr += 1 << max_size_bits;
+                            ut_paddr_updated = cur_paddr;
                         } else {
+                            let remaining = ut_paddr_end.saturating_sub(cur_paddr);
+
+                            if remaining > 0 {
+                                let max_bits_left = (usize::BITS - 1 - remaining.leading_zeros()) as usize;
+
+                                // Target address boundary up to which we consume memory
+                                let aligned_paddr = ut_paddr_end - (1 << max_bits_left);
+
+                                // Loop to consume memory from cur_paddr up to aligned_paddr
+                                while cur_paddr < aligned_paddr {
+                                    let chunk_remaining = aligned_paddr - cur_paddr;
+
+                                    // Find the largest size_bits that fits in chunk_remaining
+                                    // AND respects alignment of cur_paddr
+                                    let bits_for_chunk = (usize::BITS - 1 - chunk_remaining.leading_zeros()) as usize;
+                                    let align_bits = cur_paddr.trailing_zeros() as usize;
+
+                                    // Allocation bit size must not exceed current address alignment
+                                    let alloc_bits = bits_for_chunk.min(align_bits);
+
+                                    let hold_slot = hold_slots.get_slot()?;
+                                    trace!(
+                                        "Creating dummy: paddr=0x{cur_paddr:x}, size_bits={max_size_bits}"
+                                    );
+                                    self.ut_cap(*i_ut).untyped_retype(
+                                        &sel4::ObjectBlueprint::Untyped {
+                                            size_bits: alloc_bits,
+                                        },
+                                        &init_thread_cnode_absolute_cptr(),
+                                        hold_slot.index(),
+                                        1,
+                                    )?;
+                                    hold_slots.report_used();
+
+                                    cur_paddr += 1 << alloc_bits;
+                                }
+                            }
+
+                            ut_paddr_updated = cur_paddr;
                             cur_paddr = target;
                         }
                     }
@@ -358,11 +400,20 @@ impl<'a> Initializer<'a> {
                         1,
                     )?;
                     cur_paddr += 1 << blueprint.physical_size_bits();
+                    ut_paddr_updated = cur_paddr;
                     next_obj_with_paddr += 1;
                 } else {
                     break;
                 }
             }
+
+            let size_bits_updated = (ut_paddr_end - ut_paddr_updated).checked_ilog2().map(|b| b as usize).unwrap_or(0);
+            self.capdl_bootinfo.untypedList[*i_ut+2] = sel4::sys::seL4_UntypedDesc {
+                paddr: ut_paddr_updated as u64,
+                sizeBits: size_bits_updated as u8,
+                isDevice: ut.is_device() as u8,
+                padding: [0; 6],
+            };
         }
 
         // Ensure that we've created every root object
@@ -672,7 +723,7 @@ impl<'a> Initializer<'a> {
                     let dest = untypeds_cnode_cptr_init.absolute_cptr_from_bits_with_depth((ut_idx + 2) as u64, obj.size_bits as usize);
                     let _ = dest.move_(src).inspect_err(|e| panic!("Failed to copy untypeds {}", e));
 
-                    self.capdl_bootinfo.untypedList[(ut_idx + 2) as usize] = ut.inner().clone();
+                    // self.capdl_bootinfo.untypedList[(ut_idx + 2) as usize] = ut.inner().clone();
                 }
             }
         }

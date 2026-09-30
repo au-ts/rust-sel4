@@ -15,8 +15,6 @@ use sel4_config::sel4_cfg;
 
 use crate::{FrameObjectType, IpcBuffer, cap_type, init_thread::SlotRegion, newtype_methods, sys};
 
-#[allow(unused_imports)]
-use log::{debug, error, info, trace};
 /// A wrapped pointer to a [`BootInfo`] block.
 ///
 /// Access [`BootInfo`] via `Deref`, and [`BootInfoExtraIter`] via [`extra`](BootInfoPtr::extra).

@@ -19,7 +19,7 @@ use log::{debug, error, info, trace};
 
 use sel4::{
     CapRights, CapTypeForFrameObjectOfFixedSize, cap_type,
-    init_thread::{self, Slot, SlotRegion},
+    init_thread::{self, Slot},
 };
 use sel4_capdl_initializer_types::*;
 
@@ -30,14 +30,34 @@ use crate::memory::{CopyAddrs, get_user_image_frame_slot};
 
 type Result<T> = CoreResult<T, CapDLInitializerError>;
 
+const CDL_UT_DESC_NO_PARENT: u16 = u16::MAX;
+
+#[derive(Default, Copy, Clone)]
+#[repr(C)]
+pub struct CapDlUntypedDesc {
+    base_paddr: usize,
+    /// Absolute paddr of the untyped's free pointer after the initialiser finished.
+    /// The next retype of an N-bit object lands at align_up(watermark, 1 << N).
+    watermark: usize,
+    size_bits: u8,
+    is_device: u8,
+    child_of: u16, // in terms of untypeds_range
+    _padding: [u8; 4],
+}
+
+const RECV_SLOT_IRQ_CONTROL: usize = 1;
+const RECV_SLOT_IOPORT_CONTROL: usize = 2;
+const RECV_SLOT_UNTYPEDS_START: usize = 3;
+
+// @billn probably a better idea to re-use the seL4 BootInfo struct itself to avoid reinventing the wheel
+// todo flag in RFC when get around to pushing it forward.
+
 #[repr(C)]
 pub struct CapDLBootInfo {
-    untypeds: SlotRegion<cap_type::Untyped>,
-    // TODO: figure out the size of this, might have more untypeds after splitting? and where to
-    // allocate
-    #[allow(non_snake_case)]
-    untypedList: [sel4::sys::seL4_UntypedDesc; sel4::sel4_cfg_usize!(MAX_NUM_BOOTINFO_UNTYPED_CAPS)],
-    // TODO: add watermark tracking
+    irq_control: usize,
+    x86_ioport_control: usize,
+    untypeds_range: sel4::sys::seL4_SlotRegion,
+    untypeds_list: [CapDlUntypedDesc; sel4::sel4_cfg_usize!(MAX_NUM_BOOTINFO_UNTYPED_CAPS)],
 }
 
 pub struct Initializer<'a> {
@@ -76,8 +96,17 @@ impl<'a> Initializer<'a> {
             .unwrap();
 
         let capdl_bootinfo = CapDLBootInfo {
-            untypeds: SlotRegion::<cap_type::Untyped>::from_range(2..bootinfo.untyped().len()+2),
-            untypedList: [sel4::sys::seL4_UntypedDesc {..Default::default() }; sel4::sel4_cfg_usize!(MAX_NUM_BOOTINFO_UNTYPED_CAPS)],
+            irq_control: 0,
+            x86_ioport_control: 0,
+            untypeds_range: sel4::sys::seL4_SlotRegion { start: 0, end: 0 },
+            untypeds_list: [CapDlUntypedDesc {
+                base_paddr: 0,
+                watermark: 0,
+                size_bits: 0,
+                is_device: 0,
+                child_of: CDL_UT_DESC_NO_PARENT,
+                _padding: [0; 4],
+            }; sel4::sel4_cfg_usize!(MAX_NUM_BOOTINFO_UNTYPED_CAPS)],
         };
 
         Initializer {
@@ -103,7 +132,7 @@ impl<'a> Initializer<'a> {
     fn run(&mut self) -> Result<()> {
         self.create_objects()?;
 
-        self.init_untypeds_cnode()?;
+        self.init_post_capdl_cnode()?;
         self.init_irqs()?;
         self.init_asids()?;
         self.init_frames()?;
@@ -251,7 +280,7 @@ impl<'a> Initializer<'a> {
             let ut_paddr_start = ut.paddr();
             let ut_paddr_end = ut_paddr_start + ut_size_bytes;
             let mut cur_paddr = ut_paddr_start;
-            let mut ut_paddr_updated = ut_paddr_start;
+            let mut watermark = ut_paddr_start;
             trace!(
                 "Allocating from untyped: {:#x}..{:#x} (size_bits = {}, device = {:?})",
                 ut_paddr_start,
@@ -276,7 +305,6 @@ impl<'a> Initializer<'a> {
                 let target_is_obj_with_paddr = target < ut_paddr_end;
                 trace!("target paddr: {}", target);
 
-                // ut_cur_paddr < target_paddr
                 while cur_paddr < target {
                     let max_size_bits = {
                         let alignment_bits = (cur_paddr - ut_paddr_start).trailing_zeros();
@@ -315,7 +343,7 @@ impl<'a> Initializer<'a> {
                                     1,
                                 )?;
                                 cur_paddr += 1 << size_bits;
-                                ut_paddr_updated = cur_paddr;
+                                watermark = cur_paddr;
                                 *obj_id += 1;
                                 created = true;
                                 break;
@@ -338,47 +366,8 @@ impl<'a> Initializer<'a> {
                             )?;
                             hold_slots.report_used();
                             cur_paddr += 1 << max_size_bits;
-                            ut_paddr_updated = cur_paddr;
+                            watermark = cur_paddr;
                         } else {
-                            let remaining = ut_paddr_end.saturating_sub(cur_paddr);
-
-                            if remaining > 0 {
-                                let max_bits_left = (usize::BITS - 1 - remaining.leading_zeros()) as usize;
-
-                                // Target address boundary up to which we consume memory
-                                let aligned_paddr = ut_paddr_end - (1 << max_bits_left);
-
-                                // Loop to consume memory from cur_paddr up to aligned_paddr
-                                while cur_paddr < aligned_paddr {
-                                    let chunk_remaining = aligned_paddr - cur_paddr;
-
-                                    // Find the largest size_bits that fits in chunk_remaining
-                                    // AND respects alignment of cur_paddr
-                                    let bits_for_chunk = (usize::BITS - 1 - chunk_remaining.leading_zeros()) as usize;
-                                    let align_bits = cur_paddr.trailing_zeros() as usize;
-
-                                    // Allocation bit size must not exceed current address alignment
-                                    let alloc_bits = bits_for_chunk.min(align_bits);
-
-                                    let hold_slot = hold_slots.get_slot()?;
-                                    trace!(
-                                        "Creating dummy: paddr=0x{cur_paddr:x}, size_bits={max_size_bits}"
-                                    );
-                                    self.ut_cap(*i_ut).untyped_retype(
-                                        &sel4::ObjectBlueprint::Untyped {
-                                            size_bits: alloc_bits,
-                                        },
-                                        &init_thread_cnode_absolute_cptr(),
-                                        hold_slot.index(),
-                                        1,
-                                    )?;
-                                    hold_slots.report_used();
-
-                                    cur_paddr += 1 << alloc_bits;
-                                }
-                            }
-
-                            ut_paddr_updated = cur_paddr;
                             cur_paddr = target;
                         }
                     }
@@ -400,19 +389,20 @@ impl<'a> Initializer<'a> {
                         1,
                     )?;
                     cur_paddr += 1 << blueprint.physical_size_bits();
-                    ut_paddr_updated = cur_paddr;
+                    watermark = cur_paddr;
                     next_obj_with_paddr += 1;
                 } else {
                     break;
                 }
             }
 
-            let size_bits_updated = (ut_paddr_end - ut_paddr_updated).checked_ilog2().map(|b| b as usize).unwrap_or(0);
-            self.capdl_bootinfo.untypedList[*i_ut+2] = sel4::sys::seL4_UntypedDesc {
-                paddr: ut_paddr_updated as u64,
-                sizeBits: size_bits_updated as u8,
-                isDevice: ut.is_device() as u8,
-                padding: [0; 6],
+            self.capdl_bootinfo.untypeds_list[*i_ut] = CapDlUntypedDesc {
+                base_paddr: ut_paddr_start,
+                watermark,
+                size_bits: ut_size_bits.try_into().unwrap(),
+                is_device: ut.is_device() as u8,
+                child_of: CDL_UT_DESC_NO_PARENT,
+                _padding: [0; 4],
             };
         }
 
@@ -705,28 +695,50 @@ impl<'a> Initializer<'a> {
         Ok(())
     }
 
-    fn init_untypeds_cnode(&mut self) -> Result<()> {
-        info!("Init untypeds cnode");
+    fn init_post_capdl_cnode(&mut self) -> Result<()> {
+        debug!("Initializing post capDL CNode");
 
-        for (obj_id, obj) in self.filter_objects::<object::ArchivedCNode>() {
-            if obj.receive_initialiser_caps {
-                let untypeds_cnode_cptr_init = self.orig_cap::<cap_type::CNode>(obj_id);
-                let irq_control_src = &init_thread::slot::CNODE.cap().absolute_cptr(init_thread::slot::IRQ_CONTROL.cap());
-                let irq_control_dest = untypeds_cnode_cptr_init.absolute_cptr_from_bits_with_depth(1, obj.size_bits as usize);
-                // let rights = CapRights::all();
-                // let _ = irq_control_dest.copy(irq_control_src, rights);
-                let _ = irq_control_dest.move_(irq_control_src);
+        let mut receivers = self
+            .filter_objects_with::<object::ArchivedCNode>(|obj| obj.receive_initialiser_caps);
+        let Some((obj_id, obj)) = receivers.next() else {
+            return Ok(());
+        };
+        assert!(receivers.next().is_none(), "only one CNode may receive initialiser caps");
 
-                for (ut_idx, ut) in self.bootinfo.untyped_list().iter().enumerate() {
-                    // insert untyped cap to cnode from slot 2
-                    let src = &init_thread::slot::CNODE.cap().absolute_cptr_from_bits_with_depth(self.ut_cap(ut_idx).bits(), sel4::WORD_SIZE);
-                    let dest = untypeds_cnode_cptr_init.absolute_cptr_from_bits_with_depth((ut_idx + 2) as u64, obj.size_bits as usize);
-                    let _ = dest.move_(src).inspect_err(|e| panic!("Failed to copy untypeds {}", e));
+        let size_bits: usize = obj.size_bits.into();
+        let num_uts = self.bootinfo.untyped().len();
+        let untypeds_end = RECV_SLOT_UNTYPEDS_START + num_uts;
+        assert!(
+            untypeds_end <= 1 << size_bits,
+            "receiving CNode has {} slots, needs {}",
+            1usize << size_bits,
+            untypeds_end
+        );
 
-                    // self.capdl_bootinfo.untypedList[(ut_idx + 2) as usize] = ut.inner().clone();
-                }
+        let dst_cnode = self.orig_cap::<cap_type::CNode>(obj_id);
+        let dst = |slot: usize| dst_cnode.absolute_cptr_from_bits_with_depth(slot as u64, size_bits);
+        let root = init_thread::slot::CNODE.cap();
+
+        dst(RECV_SLOT_IRQ_CONTROL).move_(&root.absolute_cptr(init_thread::slot::IRQ_CONTROL.cap()))?;
+        self.capdl_bootinfo.irq_control = RECV_SLOT_IRQ_CONTROL;
+
+        sel4::sel4_cfg_if! {
+            if #[sel4_cfg(ARCH_X86)] {
+                dst(RECV_SLOT_IOPORT_CONTROL)
+                    .move_(&root.absolute_cptr(init_thread::slot::IO_PORT_CONTROL.cap()))?;
+                self.capdl_bootinfo.x86_ioport_control = RECV_SLOT_IOPORT_CONTROL;
             }
         }
+
+        // @billn sus: the post initialiser component can just call revoke on the UTs and destroy all
+        // the objects that the capDL initialiser created, including the post initialiser component itself!
+        for ut_idx in 0..num_uts {
+            dst(RECV_SLOT_UNTYPEDS_START + ut_idx).move_(&root.absolute_cptr(self.ut_cap(ut_idx)))?;
+        }
+        self.capdl_bootinfo.untypeds_range = sel4::sys::seL4_SlotRegion {
+            start: RECV_SLOT_UNTYPEDS_START as sel4::Word,
+            end: untypeds_end as sel4::Word,
+        };
 
         Ok(())
     }

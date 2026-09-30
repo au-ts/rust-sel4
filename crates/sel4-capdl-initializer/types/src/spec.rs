@@ -424,7 +424,7 @@ pub mod object {
     pub struct CNode {
         pub size_bits: u8,
         pub slots: Vec<CapTableEntry>,
-        pub receive_all_untypeds: bool,
+        pub receive_initialiser_caps: bool,
     }
 
     #[derive(Debug, Clone, Eq, PartialEq, IsObject, HasCapTable)]

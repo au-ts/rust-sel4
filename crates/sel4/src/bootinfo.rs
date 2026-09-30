@@ -173,7 +173,7 @@ pub enum BootInfoExtraId {
     X86FrameBuffer,
     X86TscFreq,
     Fdt,
-    PostCapDLUntypeds,
+    PostCapDlBootInfo,
 }
 
 impl BootInfoExtraId {

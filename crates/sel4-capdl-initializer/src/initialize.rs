@@ -668,7 +668,7 @@ impl<'a> Initializer<'a> {
                             }
                         }
                     }
-                    if content_bootinfo.id.to_sel4() == sel4::BootInfoExtraId::PostCapDLUntypeds {
+                    if content_bootinfo.id.to_sel4() == sel4::BootInfoExtraId::PostCapDlBootInfo {
                         let p = &self.capdl_bootinfo as *const CapDLBootInfo as *const u8;
                         let capdl_bootinfo_slice = unsafe { slice::from_raw_parts(p, mem::size_of::<CapDLBootInfo>()) };
                         // TODO: double-check the logic here
@@ -709,7 +709,7 @@ impl<'a> Initializer<'a> {
         info!("Init untypeds cnode");
 
         for (obj_id, obj) in self.filter_objects::<object::ArchivedCNode>() {
-            if obj.receive_all_untypeds {
+            if obj.receive_initialiser_caps {
                 let untypeds_cnode_cptr_init = self.orig_cap::<cap_type::CNode>(obj_id);
                 let irq_control_src = &init_thread::slot::CNODE.cap().absolute_cptr(init_thread::slot::IRQ_CONTROL.cap());
                 let irq_control_dest = untypeds_cnode_cptr_init.absolute_cptr_from_bits_with_depth(1, obj.size_bits as usize);

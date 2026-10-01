@@ -30,21 +30,6 @@ use crate::memory::{CopyAddrs, get_user_image_frame_slot};
 
 type Result<T> = CoreResult<T, CapDLInitializerError>;
 
-const CDL_UT_DESC_NO_PARENT: u16 = u16::MAX;
-
-#[derive(Default, Copy, Clone)]
-#[repr(C)]
-pub struct CapDlUntypedDesc {
-    base_paddr: usize,
-    /// Absolute paddr of the untyped's free pointer after the initialiser finished.
-    /// The next retype of an N-bit object lands at align_up(watermark, 1 << N).
-    watermark: usize,
-    size_bits: u8,
-    is_device: u8,
-    child_of: u16, // in terms of untypeds_range
-    _padding: [u8; 4],
-}
-
 const RECV_SLOT_IRQ_CONTROL: usize = 1;
 const RECV_SLOT_IOPORT_CONTROL: usize = 2;
 const RECV_SLOT_UNTYPEDS_START: usize = 3;
@@ -56,12 +41,13 @@ const RECV_SLOT_UNTYPEDS_START: usize = 3;
 pub struct CapDLBootInfo {
     irq_control: usize,
     x86_ioport_control: usize,
-    untypeds_range: sel4::sys::seL4_SlotRegion,
-    untypeds_list: [CapDlUntypedDesc; sel4::sel4_cfg_usize!(MAX_NUM_BOOTINFO_UNTYPED_CAPS)],
+    ut_range: sel4::sys::seL4_SlotRegion,
+    ut_list: [sel4::sys::seL4_UntypedDesc; sel4::sel4_cfg_usize!(MAX_NUM_BOOTINFO_UNTYPED_CAPS)],
 }
 
 pub struct Initializer<'a> {
     bootinfo: &'a sel4::BootInfoPtr,
+    uts_avail_to_post_init: [bool; sel4::sel4_cfg_usize!(MAX_NUM_BOOTINFO_UNTYPED_CAPS)],
     capdl_bootinfo: CapDLBootInfo,
     user_image_bounds: Range<usize>,
     copy_addrs: CopyAddrs,
@@ -98,19 +84,18 @@ impl<'a> Initializer<'a> {
         let capdl_bootinfo = CapDLBootInfo {
             irq_control: 0,
             x86_ioport_control: 0,
-            untypeds_range: sel4::sys::seL4_SlotRegion { start: 0, end: 0 },
-            untypeds_list: [CapDlUntypedDesc {
-                base_paddr: 0,
-                watermark: 0,
-                size_bits: 0,
-                is_device: 0,
-                child_of: CDL_UT_DESC_NO_PARENT,
-                _padding: [0; 4],
+            ut_range: sel4::sys::seL4_SlotRegion { start: 0, end: 0 },
+            ut_list: [sel4::sys::seL4_UntypedDesc {
+                paddr: 0,
+                sizeBits: 0,
+                isDevice: 0,
+                padding: [0; 6],
             }; sel4::sel4_cfg_usize!(MAX_NUM_BOOTINFO_UNTYPED_CAPS)],
         };
 
         Initializer {
             bootinfo,
+            uts_avail_to_post_init: [false; sel4::sel4_cfg_usize!(MAX_NUM_BOOTINFO_UNTYPED_CAPS)],
             capdl_bootinfo,
             user_image_bounds,
             copy_addrs,
@@ -396,14 +381,11 @@ impl<'a> Initializer<'a> {
                 }
             }
 
-            self.capdl_bootinfo.untypeds_list[*i_ut] = CapDlUntypedDesc {
-                base_paddr: ut_paddr_start,
-                watermark,
-                size_bits: ut_size_bits.try_into().unwrap(),
-                is_device: ut.is_device() as u8,
-                child_of: CDL_UT_DESC_NO_PARENT,
-                _padding: [0; 4],
-            };
+            if watermark == ut.paddr() {
+                self.uts_avail_to_post_init[*i_ut] = true;
+            } else {
+                info!("UT {}: {:#x}..{:#x}, is device '{}', won't be available to post-initialiser.", *i_ut, ut.paddr(), ut.paddr() + (1 << ut_size_bits), ut.is_device());
+            }
         }
 
         // Ensure that we've created every root object
@@ -730,14 +712,23 @@ impl<'a> Initializer<'a> {
             }
         }
 
-        // @billn sus: the post initialiser component can just call revoke on the UTs and destroy all
-        // the objects that the capDL initialiser created, including the post initialiser component itself!
+        let mut dest_idx: usize = 0;
+        let uts = self.bootinfo.untyped_list();
         for ut_idx in 0..num_uts {
-            dst(RECV_SLOT_UNTYPEDS_START + ut_idx).move_(&root.absolute_cptr(self.ut_cap(ut_idx)))?;
+            if self.uts_avail_to_post_init[ut_idx] {
+                dst(RECV_SLOT_UNTYPEDS_START + dest_idx).move_(&root.absolute_cptr(self.ut_cap(ut_idx)))?;
+                self.capdl_bootinfo.ut_list[dest_idx] = sel4::sys::seL4_UntypedDesc {
+                    paddr: uts[ut_idx].paddr().try_into().unwrap(),
+                    sizeBits: uts[ut_idx].size_bits().try_into().unwrap(),
+                    isDevice: uts[ut_idx].is_device().try_into().unwrap(),
+                    padding: [0; 6],
+                };
+                dest_idx += 1;
+            }
         }
-        self.capdl_bootinfo.untypeds_range = sel4::sys::seL4_SlotRegion {
-            start: RECV_SLOT_UNTYPEDS_START as sel4::Word,
-            end: untypeds_end as sel4::Word,
+        self.capdl_bootinfo.ut_range = sel4::sys::seL4_SlotRegion {
+            start: RECV_SLOT_UNTYPEDS_START.try_into().unwrap(),
+            end: (RECV_SLOT_UNTYPEDS_START + dest_idx).try_into().unwrap(),
         };
 
         Ok(())

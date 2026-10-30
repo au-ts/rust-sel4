@@ -209,6 +209,7 @@ pub enum Object<D> {
     RiscvIrq(object::RiscvIrq),
     IOPorts(object::IOPorts),
     SchedContext(object::SchedContext),
+    SchedControl(object::SchedControl),
     Reply,
     ArmSmc,
     DomainSet,
@@ -306,6 +307,7 @@ pub enum Cap {
     Reply(cap::Reply),
     ArmSmc(cap::ArmSmc),
     DomainSet(cap::DomainSet),
+    SchedControl(cap::SchedControl),
 }
 
 pub trait IsCap {
@@ -338,6 +340,7 @@ impl Cap {
             Self::RiscvIrqHandler(cap) => cap.object,
             Self::IOPorts(cap) => cap.object,
             Self::SchedContext(cap) => cap.object,
+            Self::SchedControl(cap) => cap.object,
             Self::Reply(cap) => cap.object,
             Self::ArmSmc(cap) => cap.object,
             Self::DomainSet(cap) => cap.object,
@@ -364,6 +367,7 @@ impl Cap {
             Self::RiscvIrqHandler(cap) => cap.object = object,
             Self::IOPorts(cap) => cap.object = object,
             Self::SchedContext(cap) => cap.object = object,
+            Self::SchedControl(cap) => cap.object = object,
             Self::Reply(cap) => cap.object = object,
             Self::ArmSmc(cap) => cap.object = object,
             Self::DomainSet(cap) => cap.object = object,
@@ -400,6 +404,7 @@ impl ArchivedCap {
             Self::RiscvIrqHandler(cap) => cap.object,
             Self::IOPorts(cap) => cap.object,
             Self::SchedContext(cap) => cap.object,
+            Self::SchedControl(cap) => cap.object,
             Self::Reply(cap) => cap.object,
             Self::ArmSmc(cap) => cap.object,
             Self::DomainSet(cap) => cap.object,
@@ -606,6 +611,13 @@ pub mod object {
         pub extra: SchedContextExtraInfo,
     }
 
+    #[derive(Debug, Clone, Eq, PartialEq, IsObject)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[derive(rkyv::Archive, rkyv::Serialize)]
+    pub struct SchedControl {
+        pub core: Word,
+    }
+
     #[derive(Debug, Clone, Eq, PartialEq)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     #[derive(rkyv::Archive, rkyv::Serialize)]
@@ -767,6 +779,13 @@ pub mod cap {
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     #[derive(rkyv::Archive, rkyv::Serialize)]
     pub struct SchedContext {
+        pub object: ObjectId,
+    }
+
+    #[derive(Debug, Clone, Eq, PartialEq, IsCap)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[derive(rkyv::Archive, rkyv::Serialize)]
+    pub struct SchedControl {
         pub object: ObjectId,
     }
 

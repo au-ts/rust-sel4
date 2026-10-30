@@ -2283,6 +2283,7 @@ name = "sel4"
 version = "0.1.0"
 dependencies = [
  "cfg-if",
+ "log",
  "sel4-config",
  "sel4-sys",
 ]

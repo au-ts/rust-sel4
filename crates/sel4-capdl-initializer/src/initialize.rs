@@ -117,6 +117,7 @@ impl<'a> Initializer<'a> {
         sel4::sel4_cfg_if! {
             if #[sel4_cfg(KERNEL_MCS)] {
                 self.init_sched_contexts()?;
+                self.copy_sched_control_caps()?;
             }
         }
 
@@ -881,6 +882,22 @@ impl<'a> Initializer<'a> {
                 _ => panic!("unexpected non-IOPageTable cap in IOSpace slot"),
             })
             .unwrap_or_else(|| panic!("missing IOPageTable in IOSpace slot {slot}"))
+    }
+
+    #[sel4::sel4_cfg(KERNEL_MCS)]
+    fn copy_sched_control_caps(&self) -> Result<()> {
+        debug!("Copying SchedControl caps");
+
+        for (obj_id, obj) in self.filter_objects::<object::ArchivedSchedControl>() {
+            let core = usize::try_from(obj.core.to_sel4()).unwrap();
+            let src = init_thread::slot::CNODE
+                .cap()
+                .absolute_cptr(self.bootinfo.sched_control().index(core).cap());
+            self.orig_absolute_cptr(obj_id)
+                .copy(&src, CapRights::all())?;
+        }
+
+        Ok(())
     }
 
     #[sel4::sel4_cfg(KERNEL_MCS)]

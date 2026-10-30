@@ -111,6 +111,7 @@ impl<D> Spec<D> {
                             Object::RiscvIrq(obj) => Object::RiscvIrq(obj.clone()),
                             Object::IOPorts(obj) => Object::IOPorts(obj.clone()),
                             Object::SchedContext(obj) => Object::SchedContext(obj.clone()),
+                            Object::SchedControl(obj) => Object::SchedControl(obj.clone()),
                             Object::Reply => Object::Reply,
                             Object::ArmSmc => Object::ArmSmc,
                             Object::DomainSet => Object::DomainSet,

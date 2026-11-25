@@ -34,7 +34,7 @@ mk {
   };
   target."cfg(any(target_arch = \"arm\", target_arch = \"aarch64\"))".dependencies = {
     inherit (versions) smccc;
-    inherit (localCrates) sel4-pl011-driver sel4-bcm2835-aux-uart-driver;
+    inherit (localCrates) sel4-pl011-driver sel4-bcm2835-aux-uart-driver sel4-meson-uart-driver;
   };
   target."cfg(target_arch = \"aarch64\")".dependencies = {
     inherit (versions) aarch64-cpu;

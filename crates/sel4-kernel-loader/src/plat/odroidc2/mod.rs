@@ -43,11 +43,7 @@ impl Plat for PlatImpl {
         nb::block!(SERIAL_DEVICE.lock().write(c)).unwrap_or_else(|err| match err {});
     }
 
-    fn put_char_without_synchronization(c: u8) {
-        nb::block!(get_serial_device().write(c)).unwrap_or_else(|err| match err {});
-    }
-
-    fn start_secondary_core(core_id: usize, sp: usize) {
-        psci::start_secondary_core(core_id, sp)
+    fn start_core(core_id: usize, sp: usize) {
+        psci::start_core(core_id, sp)
     }
 }

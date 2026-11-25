@@ -44,6 +44,27 @@ pub(crate) mod cap_type_arch {
         ObjectBlueprintArch
     });
 
+    #[sel4_config::sel4_cfg(RISCV_IOMMU)]
+    crate::declare_cap_type!(IOMMUControl);
+
+    #[sel4_config::sel4_cfg(RISCV_IOMMU)]
+    declare_cap_type_for_object_of_fixed_size!(RootX4PageTable {
+        ObjectTypeArch,
+        ObjectBlueprintArch
+    });
+
+    #[sel4_config::sel4_cfg(RISCV_IOMMU)]
+    declare_cap_type_for_object_of_fixed_size!(IOMMUDDT {
+        ObjectTypeArch,
+        ObjectBlueprintArch
+    });
+
+    #[sel4_config::sel4_cfg(RISCV_IOMMU)]
+    declare_cap_type_for_object_of_fixed_size!(IOMMUDevice {
+        ObjectTypeArch,
+        ObjectBlueprintArch
+    });
+
     declare_cap_type_for_object_of_fixed_size!(PageTable {
         ObjectTypeArch,
         ObjectBlueprintArch
@@ -63,4 +84,12 @@ pub(crate) mod cap_arch {
     declare_cap_alias!(GigaPage);
 
     declare_cap_alias!(PageTable);
+    #[sel4_config::sel4_cfg(RISCV_IOMMU)]
+    declare_cap_alias!(RootX4PageTable);
+    #[sel4_config::sel4_cfg(RISCV_IOMMU)]
+    declare_cap_alias!(IOMMUControl);
+    #[sel4_config::sel4_cfg(RISCV_IOMMU)]
+    declare_cap_alias!(IOMMUDDT);
+    #[sel4_config::sel4_cfg(RISCV_IOMMU)]
+    declare_cap_alias!(IOMMUDevice);
 }

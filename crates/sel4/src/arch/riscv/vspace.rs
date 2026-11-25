@@ -82,18 +82,33 @@ impl CapTypeForFrameObjectOfFixedSize for cap_type::GigaPage {
 // // //
 
 /// Translation table object types for this kernel configuration.
+#[sel4_config::sel4_cfg_enum]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TranslationTableObjectType {
     PageTable,
+    #[sel4_cfg(RISCV_IOMMU)]
+    RootX4PageTable,
 }
 
 impl TranslationTableObjectType {
     pub const fn blueprint(&self) -> ObjectBlueprint {
-        ObjectBlueprint::Arch(ObjectBlueprintRiscV::PageTable)
+        sel4_cfg_wrap_match! {
+            match self {
+                Self::PageTable => ObjectBlueprint::Arch(ObjectBlueprintRiscV::PageTable),
+                #[sel4_cfg(RISCV_IOMMU)]
+                Self::RootX4PageTable => ObjectBlueprint::Arch(ObjectBlueprintRiscV::RootX4PageTable),
+            }
+        }
     }
 
     pub const fn index_bits(&self) -> usize {
-        u32_into_usize(sys::seL4_PageTableIndexBits)
+        sel4_cfg_wrap_match! {
+            match self {
+                Self::PageTable => u32_into_usize(sys::seL4_PageTableIndexBits),
+                #[sel4_cfg(RISCV_IOMMU)]
+                Self::RootX4PageTable => u32_into_usize(sys::seL4_RootX4PageTableIndexBits),
+            }
+        }
     }
 
     pub const fn from_level(level: usize) -> Option<Self> {
@@ -103,6 +118,12 @@ impl TranslationTableObjectType {
             None
         }
     }
+}
+
+#[sel4_config::sel4_cfg(RISCV_IOMMU)]
+impl CapTypeForTranslationTableObject for cap_type::RootX4PageTable {
+    const TRANSLATION_TABLE_OBJECT_TYPE: TranslationTableObjectType =
+        TranslationTableObjectType::RootX4PageTable;
 }
 
 impl CapTypeForTranslationTableObject for cap_type::PageTable {

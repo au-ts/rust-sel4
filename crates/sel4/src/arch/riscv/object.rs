@@ -20,6 +20,12 @@ pub enum ObjectTypeRISCV {
     _4kPage,
     MegaPage,
     PageTable,
+    #[sel4_cfg(RISCV_IOMMU)]
+    RootX4PageTable,
+    #[sel4_cfg(RISCV_IOMMU)]
+    IOMMUDDT,
+    #[sel4_cfg(RISCV_IOMMU)]
+    IOMMUDevice,
     #[sel4_cfg(any(PT_LEVELS = "3", PT_LEVELS = "4"))]
     GigaPage,
 }
@@ -33,6 +39,12 @@ impl ObjectTypeRISCV {
                 #[sel4_cfg(any(PT_LEVELS = "3", PT_LEVELS = "4"))]
                 Self::GigaPage => sys::_mode_object::seL4_RISCV_Giga_Page,
                 Self::PageTable => sys::_object::seL4_RISCV_PageTableObject,
+                #[sel4_cfg(RISCV_IOMMU)]
+                Self::IOMMUDevice => sys::_object::seL4_RISCV_IOMMUDeviceObject,
+                #[sel4_cfg(RISCV_IOMMU)]
+                Self::IOMMUDDT => sys::_object::seL4_RISCV_IOMMUDDTObject,
+                #[sel4_cfg(RISCV_IOMMU)]
+                Self::RootX4PageTable => sys::_object::seL4_RISCV_RootX4PageTableObject,
             }
         }
     }
@@ -46,6 +58,12 @@ pub enum ObjectBlueprintRiscV {
     #[sel4_cfg(any(PT_LEVELS = "3", PT_LEVELS = "4"))]
     GigaPage,
     PageTable,
+    #[sel4_cfg(RISCV_IOMMU)]
+    RootX4PageTable,
+    #[sel4_cfg(RISCV_IOMMU)]
+    IOMMUDDT,
+    #[sel4_cfg(RISCV_IOMMU)]
+    IOMMUDevice,
 }
 
 impl ObjectBlueprintRiscV {
@@ -57,6 +75,12 @@ impl ObjectBlueprintRiscV {
                 #[sel4_cfg(any(PT_LEVELS = "3", PT_LEVELS = "4"))]
                 Self::GigaPage => ObjectTypeRISCV::GigaPage,
                 Self::PageTable => ObjectTypeRISCV::PageTable,
+                #[sel4_cfg(RISCV_IOMMU)]
+                Self::IOMMUDevice => ObjectTypeRISCV::IOMMUDevice,
+                #[sel4_cfg(RISCV_IOMMU)]
+                Self::IOMMUDDT => ObjectTypeRISCV::IOMMUDDT,
+                #[sel4_cfg(RISCV_IOMMU)]
+                Self::RootX4PageTable => ObjectTypeRISCV::RootX4PageTable,
             }
         }
     }
@@ -69,6 +93,12 @@ impl ObjectBlueprintRiscV {
                 #[sel4_cfg(any(PT_LEVELS = "3", PT_LEVELS = "4"))]
                 Self::GigaPage => u32_into_usize(sys::seL4_HugePageBits),
                 Self::PageTable => u32_into_usize(sys::seL4_PageTableBits),
+                #[sel4_cfg(RISCV_IOMMU)]
+                Self::IOMMUDevice => u32_into_usize(sys::seL4_IOMMUDeviceBits),
+                #[sel4_cfg(RISCV_IOMMU)]
+                Self::IOMMUDDT => u32_into_usize(sys::seL4_IOMMUDDTBits),
+                #[sel4_cfg(RISCV_IOMMU)]
+                Self::RootX4PageTable => u32_into_usize(sys::seL4_RootX4PageTableBits),
             }
         }
     }

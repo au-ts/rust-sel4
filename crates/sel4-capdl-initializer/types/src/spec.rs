@@ -203,6 +203,9 @@ pub enum Object<D> {
     AsidPool(object::AsidPool),
     IOSpace(object::IOSpace),
     IOPageTable(object::IOPageTable),
+    RiscvIOSpace(object::RiscvIOSpace),
+    RiscvIOMMUDDT,
+    RiscvIOMMUDevice(object::RiscvIOMMUDevice),
     ArmIrq(object::ArmIrq),
     IrqMsi(object::IrqMsi),
     IrqIOApic(object::IrqIOApic),
@@ -239,6 +242,8 @@ impl<D> Object<D> {
             Self::PageTable(obj) => obj.slots(),
             Self::IOSpace(obj) => obj.slots(),
             Self::IOPageTable(obj) => obj.slots(),
+            Self::RiscvIOMMUDevice(obj) => obj.slots(),
+            Self::RiscvIOSpace(obj) => obj.slots(),
             Self::ArmIrq(obj) => obj.slots(),
             Self::IrqMsi(obj) => obj.slots(),
             Self::IrqIOApic(obj) => obj.slots(),
@@ -254,6 +259,8 @@ impl<D> Object<D> {
             Self::PageTable(obj) => &mut obj.slots,
             Self::IOSpace(obj) => &mut obj.slots,
             Self::IOPageTable(obj) => &mut obj.slots,
+            Self::RiscvIOMMUDevice(obj) => &mut obj.slots,
+            Self::RiscvIOSpace(obj) => &mut obj.slots,
             Self::ArmIrq(obj) => &mut obj.slots,
             Self::IrqMsi(obj) => &mut obj.slots,
             Self::IrqIOApic(obj) => &mut obj.slots,
@@ -297,6 +304,8 @@ pub enum Cap {
     AsidPool(cap::AsidPool),
     IOSpace(cap::IOSpace),
     IOPageTable(cap::IOPageTable),
+    RiscvIOMMUDDT(cap::RiscvIOMMUDDT),
+    RiscvIOMMUDevice(cap::RiscvIOMMUDevice),
     ArmIrqHandler(cap::ArmIrqHandler),
     IrqMsiHandler(cap::IrqMsiHandler),
     IrqIOApicHandler(cap::IrqIOApicHandler),
@@ -332,6 +341,8 @@ impl Cap {
             Self::AsidPool(cap) => cap.object,
             Self::IOSpace(cap) => cap.object,
             Self::IOPageTable(cap) => cap.object,
+            Self::RiscvIOMMUDevice(cap) => cap.object,
+            Self::RiscvIOMMUDDT(cap) => cap.object,
             Self::ArmIrqHandler(cap) => cap.object,
             Self::IrqMsiHandler(cap) => cap.object,
             Self::IrqIOApicHandler(cap) => cap.object,
@@ -358,6 +369,8 @@ impl Cap {
             Self::AsidPool(cap) => cap.object = object,
             Self::IOSpace(cap) => cap.object = object,
             Self::IOPageTable(cap) => cap.object = object,
+            Self::RiscvIOMMUDevice(cap) => cap.object = object,
+            Self::RiscvIOMMUDDT(cap) => cap.object = object,
             Self::ArmIrqHandler(cap) => cap.object = object,
             Self::IrqMsiHandler(cap) => cap.object = object,
             Self::IrqIOApicHandler(cap) => cap.object = object,
@@ -394,6 +407,8 @@ impl ArchivedCap {
             Self::AsidPool(cap) => cap.object,
             Self::IOSpace(cap) => cap.object,
             Self::IOPageTable(cap) => cap.object,
+            Self::RiscvIOMMUDDT(cap) => cap.object,
+            Self::RiscvIOMMUDevice(cap) => cap.object,
             Self::ArmIrqHandler(cap) => cap.object,
             Self::IrqMsiHandler(cap) => cap.object,
             Self::IrqIOApicHandler(cap) => cap.object,
@@ -477,6 +492,8 @@ pub mod object {
     pub struct PageTable {
         #[cfg_attr(feature = "serde", serde(default))]
         pub x86_ept: bool,
+        #[cfg_attr(feature = "serde", serde(default))]
+        pub riscv_root_x4: bool,
         pub is_root: bool,
         pub level: Option<u8>,
         pub slots: Vec<CapTableEntry>,
@@ -496,6 +513,26 @@ pub mod object {
         pub slots: Vec<CapTableEntry>,
         pub domain_id: Word,
         pub pci_device: PCIDevice,
+    }
+
+    #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, IsObject, HasCapTable)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[derive(rkyv::Archive, rkyv::Serialize)]
+    pub struct RiscvIOSpace {
+        pub slots: Vec<CapTableEntry>,
+    }
+
+    impl RiscvIOSpace {
+        pub const ROOT_X4_SLOT: usize = 0;
+    }
+
+    #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, IsObject, HasCapTable)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[derive(rkyv::Archive, rkyv::Serialize)]
+    pub struct RiscvIOMMUDevice {
+        pub slots: Vec<CapTableEntry>,
+        pub iommu_paddr: Word,
+        pub device_id: Word,
     }
 
     #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -727,6 +764,20 @@ pub mod cap {
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     #[derive(rkyv::Archive, rkyv::Serialize)]
     pub struct IOPageTable {
+        pub object: ObjectId,
+    }
+
+    #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, IsCap)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[derive(rkyv::Archive, rkyv::Serialize)]
+    pub struct RiscvIOMMUDDT {
+        pub object: ObjectId,
+    }
+
+    #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, IsCap)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[derive(rkyv::Archive, rkyv::Serialize)]
+    pub struct RiscvIOMMUDevice {
         pub object: ObjectId,
     }
 

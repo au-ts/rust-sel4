@@ -173,6 +173,7 @@ pub enum BootInfoExtraId {
     X86FrameBuffer,
     X86TscFreq,
     Fdt,
+    RiscvIommu,
 }
 
 impl BootInfoExtraId {
@@ -193,6 +194,9 @@ impl BootInfoExtraId {
                 Some(BootInfoExtraId::X86TscFreq)
             }
             sys::seL4_BootInfoID::SEL4_BOOTINFO_HEADER_FDT => Some(BootInfoExtraId::Fdt),
+            sys::seL4_BootInfoID::SEL4_BOOTINFO_HEADER_RISCV_IOMMU => {
+                Some(BootInfoExtraId::RiscvIommu)
+            }
             _ => None,
         }
     }

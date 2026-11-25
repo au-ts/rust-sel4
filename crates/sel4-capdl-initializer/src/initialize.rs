@@ -90,8 +90,10 @@ impl<'a> Initializer<'a> {
         self.init_frames()?;
         self.init_vspaces()?;
         sel4::sel4_cfg_if! {
-            if #[sel4_cfg(all(ARCH_X86_64,IOMMU))] {
+            if #[sel4_cfg(all(ARCH_X86_64, IOMMU))] {
                 self.init_iospaces()?;
+            } else if #[sel4_cfg(all(ARCH_RISCV64, RISCV_IOMMU))] {
+                self.init_riscv_iospaces()?;
             }
         }
 
@@ -722,6 +724,58 @@ impl<'a> Initializer<'a> {
                     let obj = self.object_as::<object::ArchivedPageTable>(cap.object);
                     self.init_vspace(vspace, level + 1, vaddr, obj)?;
                 }
+            }
+        }
+        Ok(())
+    }
+
+    #[sel4::sel4_cfg(all(ARCH_RISCV64, RISCV_IOMMU))]
+    fn init_riscv_iospaces(&mut self) -> Result<()> {
+        for (_, obj) in self.filter_objects::<object::ArchivedRiscvIOSpace>() {
+            let root_id = obj
+                .slot_as::<cap::ArchivedPageTable>(object::RiscvIOSpace::ROOT_X4_SLOT.into())
+                .expect("missing Sv39x4 root")
+                .object;
+
+            let root = self.orig_cap::<cap_type::RootX4PageTable>(root_id);
+
+            for entry in obj.slots.iter() {
+                let ArchivedCap::RiscvIOMMUDevice(cap) = &entry.cap else {
+                    continue;
+                };
+                let device = self.object_as::<object::ArchivedRiscvIOMMUDevice>(cap.object);
+                let iommu = self
+                    .bootinfo
+                    .extra()
+                    .find_map(|chunk| {
+                        if chunk.id != sel4::BootInfoExtraId::RiscvIommu {
+                            return None;
+                        }
+                        let words = chunk.content();
+                        let control = usize::from_ne_bytes(words[0..8].try_into().unwrap());
+                        let paddr = usize::from_ne_bytes(words[8..16].try_into().unwrap());
+                        (paddr == device.iommu_paddr.to_sel4() as usize && control != 0)
+                            .then(|| sel4::cap::IOMMUControl::from_bits(control as sel4::Word))
+                    })
+                    .expect("No usable IOMMU control capability for this device");
+
+                let (_, levels) = iommu.iommu_get_capabilities()?;
+                assert!((1..=3).contains(&levels));
+                for entry in device.slots.iter().take(levels as usize) {
+                    let ArchivedCap::RiscvIOMMUDDT(ddt) = &entry.cap else {
+                        panic!("expected a DDT capability in IOMMU device slots")
+                    };
+                    match self
+                        .orig_cap::<cap_type::IOMMUDDT>(ddt.object)
+                        .iommu_ddt_map(iommu, device.device_id.to_sel4())
+                    {
+                        Ok(()) => {}
+                        Err(sel4::Error::DeleteFirst) => break,
+                        Err(err) => return Err(err.into()),
+                    }
+                }
+                self.orig_cap::<cap_type::IOMMUDevice>(cap.object)
+                    .iommu_device_map(iommu, root, device.device_id.to_sel4())?;
             }
         }
         Ok(())

@@ -48,9 +48,19 @@ impl<D: Archive> ArchivedObject<D> {
                     }
                 }
                 #[sel4_cfg(ARCH_RISCV)]
-                ArchivedObject::PageTable(_obj) => {
+                ArchivedObject::PageTable(obj) => {
                     // assert!(obj.level.is_none()); // sanity check // TODO
-                    sel4::ObjectBlueprintArch::PageTable.into()
+                    if obj.riscv_root_x4 {
+                        sel4::sel4_cfg_if! {
+                            if #[sel4_cfg(all(ARCH_RISCV64, RISCV_IOMMU))] {
+                                sel4::ObjectBlueprintArch::RootX4PageTable.into()
+                            } else {
+                                panic!("Encountered an Sv39x4 root without IOMMU config.");
+                            }
+                        }
+                    } else {
+                        sel4::ObjectBlueprintArch::PageTable.into()
+                    }
                 }
                 #[sel4_cfg(all(ARCH_X86_64, VTX))]
                 ArchivedObject::PageTable(obj) => {
@@ -70,6 +80,10 @@ impl<D: Archive> ArchivedObject<D> {
                 }
                 #[sel4_cfg(all(ARCH_X86_64, IOMMU))]
                 ArchivedObject::IOPageTable(_) => sel4::ObjectBlueprintArch::IOPageTable.into(),
+                #[sel4_cfg(all(ARCH_RISCV64, RISCV_IOMMU))]
+                ArchivedObject::RiscvIOMMUDDT => sel4::ObjectBlueprintArch::IOMMUDDT.into(),
+                #[sel4_cfg(all(ARCH_RISCV64, RISCV_IOMMU))]
+                ArchivedObject::RiscvIOMMUDevice(_) => sel4::ObjectBlueprintArch::IOMMUDevice.into(),
                 ArchivedObject::AsidPool(_) => ObjectBlueprint::asid_pool(),
                 #[sel4_cfg(KERNEL_MCS)]
                 ArchivedObject::SchedContext(obj) => ObjectBlueprint::SchedContext {

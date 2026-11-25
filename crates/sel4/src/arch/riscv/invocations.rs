@@ -68,16 +68,13 @@ impl<C: InvocationContext> PageTable<C> {
 impl<C: InvocationContext> UnspecifiedIntermediateTranslationTable<C> {
     pub fn generic_intermediate_translation_table_map(
         self,
-        ty: TranslationTableObjectType,
+        _ty: TranslationTableObjectType,
         vspace: VSpace,
         vaddr: usize,
         attr: VmAttributes,
     ) -> Result<()> {
-        match ty {
-            TranslationTableObjectType::PageTable => self
-                .cast::<cap_type::PageTable>()
-                .page_table_map(vspace, vaddr, attr),
-        }
+        self.cast::<cap_type::PageTable>()
+            .page_table_map(vspace, vaddr, attr)
     }
 }
 
@@ -145,6 +142,127 @@ impl<C: InvocationContext> AsidPool<C> {
             ipc_buffer
                 .inner_mut()
                 .seL4_RISCV_ASIDPool_Assign(cptr.bits(), vspace.bits())
+        }))
+    }
+}
+
+#[sel4_config::sel4_cfg(RISCV_IOMMU)]
+impl<C: InvocationContext> IOMMUControl<C> {
+    pub fn iommu_get_capabilities(self) -> Result<(Word, Word)> {
+        let ret = self.invoke(|cptr, ipc_buffer| {
+            ipc_buffer
+                .inner_mut()
+                .seL4_RISCV_IOMMUControl_GetCapabilities(cptr.bits())
+        });
+        Error::wrap(ret.error)?;
+        Ok((ret.capabilities, ret.ddtLevels))
+    }
+
+    pub fn iommu_configure_fault_interrupt(self, enable: bool, identity: Word) -> Result<()> {
+        Error::wrap(self.invoke(|cptr, ipc_buffer| {
+            ipc_buffer
+                .inner_mut()
+                .seL4_RISCV_IOMMUControl_ConfigureFaultInterrupt(
+                    cptr.bits(),
+                    enable.into(),
+                    identity,
+                )
+        }))
+    }
+
+    pub fn iommu_map_fault_queue(self, frame: Cap<impl CapTypeForFrameObject>) -> Result<()> {
+        Error::wrap(self.invoke(|cptr, ipc_buffer| {
+            ipc_buffer
+                .inner_mut()
+                .seL4_RISCV_IOMMUControl_MapFaultQueue(cptr.bits(), frame.bits())
+        }))
+    }
+
+    pub fn iommu_rw_fault_queue(self, head: Word, clear_errors: Word) -> Result<(Word, Word)> {
+        let ret = self.invoke(|cptr, ipc_buffer| {
+            ipc_buffer.inner_mut().seL4_RISCV_IOMMUControl_RWFaultQueue(
+                cptr.bits(),
+                head,
+                clear_errors,
+            )
+        });
+        Error::wrap(ret.error)?;
+        Ok((ret.tail, ret.status))
+    }
+}
+
+#[sel4_config::sel4_cfg(RISCV_IOMMU)]
+impl<C: InvocationContext> IOMMUDDT<C> {
+    pub fn iommu_ddt_map(self, iommu: IOMMUControl, device_id: Word) -> Result<()> {
+        Error::wrap(self.invoke(|cptr, ipc_buffer| {
+            ipc_buffer
+                .inner_mut()
+                .seL4_RISCV_IOMMUDDT_Map(cptr.bits(), iommu.bits(), device_id)
+        }))
+    }
+
+    pub fn iommu_ddt_unmap(self) -> Result<()> {
+        Error::wrap(self.invoke(|cptr, ipc_buffer| {
+            ipc_buffer
+                .inner_mut()
+                .seL4_RISCV_IOMMUDDT_Unmap(cptr.bits())
+        }))
+    }
+}
+
+#[sel4_config::sel4_cfg(RISCV_IOMMU)]
+impl<C: InvocationContext> IOMMUDevice<C> {
+    pub fn iommu_device_map(
+        self,
+        iommu: IOMMUControl,
+        root: RootX4PageTable,
+        device_id: Word,
+    ) -> Result<()> {
+        Error::wrap(self.invoke(|cptr, ipc_buffer| {
+            ipc_buffer.inner_mut().seL4_RISCV_IOMMUDevice_Map(
+                cptr.bits(),
+                iommu.bits(),
+                root.bits(),
+                device_id,
+            )
+        }))
+    }
+
+    pub fn iommu_device_unmap(self) -> Result<()> {
+        Error::wrap(self.invoke(|cptr, ipc_buffer| {
+            ipc_buffer
+                .inner_mut()
+                .seL4_RISCV_IOMMUDevice_Unmap(cptr.bits())
+        }))
+    }
+
+    pub fn iommu_device_configure_first_stage(
+        self,
+        kind: Word,
+        mode: Word,
+        root_gpa: usize,
+        pscid: Word,
+        flags: Word,
+    ) -> Result<()> {
+        Error::wrap(self.invoke(|cptr, ipc_buffer| {
+            ipc_buffer
+                .inner_mut()
+                .seL4_RISCV_IOMMUDevice_ConfigureFirstStage(
+                    cptr.bits(),
+                    kind,
+                    mode,
+                    root_gpa.try_into().unwrap(),
+                    pscid,
+                    flags,
+                )
+        }))
+    }
+
+    pub fn iommu_device_invalidate_first_stage(self, kind: Word, pscid: Word) -> Result<()> {
+        Error::wrap(self.invoke(|cptr, ipc_buffer| {
+            ipc_buffer
+                .inner_mut()
+                .seL4_RISCV_IOMMUDevice_InvalidateFirstStage(cptr.bits(), kind, pscid)
         }))
     }
 }

@@ -586,7 +586,10 @@ pub mod object {
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     #[derive(rkyv::Archive, rkyv::Serialize)]
     pub struct RiscvIrqExtraInfo {
+        /// 0: level-high, 1: edge-rising, 2: level-low, 3: edge-falling.
+        /// Non-AIA IRQs use only the legacy 0/1 values.
         pub trigger: u8,
+        pub source: Option<Word>,
     }
 
     #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, IsObject)]

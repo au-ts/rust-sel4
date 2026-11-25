@@ -449,11 +449,44 @@ impl<'a> Initializer<'a> {
                         }
                         #[sel4_cfg(any(ARCH_RISCV64, ARCH_RISCV32))]
                         ArchivedObject::RiscvIrq(obj) => {
-                            init_thread::slot::IRQ_CONTROL.cap().irq_control_get_trigger(
-                                irq.to_sel4(),
-                                obj.extra.trigger != 0,
-                                &cslot_to_absolute_cptr(slot),
-                            )?;
+                            sel4::sel4_cfg_if! {
+                                if #[sel4_cfg(RISCV_APLIC)] {
+                                    if let ArchivedOption::Some(source) = obj.extra.source {
+                                        let trigger = match obj.extra.trigger {
+                                            0 => sel4::sys::seL4_RISCV_IRQLevelHigh,
+                                            1 => sel4::sys::seL4_RISCV_IRQEdgeRising,
+                                            2 => sel4::sys::seL4_RISCV_IRQLevelLow,
+                                            3 => sel4::sys::seL4_RISCV_IRQEdgeFalling,
+                                            _ => panic!(
+                                                "Invalid APLIC trigger: {}",
+                                                obj.extra.trigger
+                                            ),
+                                        };
+                                        init_thread::slot::IRQ_CONTROL.cap().irq_control_get_aplic(
+                                            irq.to_sel4(),
+                                            source.to_sel4(),
+                                            trigger.into(),
+                                            &cslot_to_absolute_cptr(slot),
+                                        )?;
+                                    } else {
+                                        init_thread::slot::IRQ_CONTROL.cap().irq_control_get(
+                                            irq.to_sel4(),
+                                            &cslot_to_absolute_cptr(slot),
+                                        )?;
+                                    }
+                                } else if #[sel4_cfg(RISCV_AIA)] {
+                                    init_thread::slot::IRQ_CONTROL.cap().irq_control_get(
+                                        irq.to_sel4(),
+                                        &cslot_to_absolute_cptr(slot),
+                                    )?;
+                                } else {
+                                    init_thread::slot::IRQ_CONTROL.cap().irq_control_get_trigger(
+                                        irq.to_sel4(),
+                                        obj.extra.trigger != 0,
+                                        &cslot_to_absolute_cptr(slot),
+                                    )?;
+                                }
+                            }
                         }
                         _ => {
                             panic!();

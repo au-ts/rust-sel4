@@ -83,6 +83,7 @@ impl<C: InvocationContext> UnspecifiedIntermediateTranslationTable<C> {
 
 impl<C: InvocationContext> IrqControl<C> {
     /// Corresponds to `seL4_IRQControl_GetTrigger`.
+    #[sel4_config::sel4_cfg(not(RISCV_AIA))]
     pub fn irq_control_get_trigger(
         self,
         irq: Word,
@@ -94,6 +95,26 @@ impl<C: InvocationContext> IrqControl<C> {
                 cptr.bits(),
                 irq,
                 edge_triggered.into(),
+                dst.root().bits(),
+                dst.path().bits(),
+                dst.path().depth_for_kernel(),
+            )
+        }))
+    }
+    #[sel4_config::sel4_cfg(RISCV_APLIC)]
+    pub fn irq_control_get_aplic(
+        self,
+        irq: Word,
+        source: Word,
+        trigger: Word,
+        dst: &AbsoluteCPtr,
+    ) -> Result<()> {
+        Error::wrap(self.invoke(|cptr, ipc_buffer| {
+            ipc_buffer.inner_mut().seL4_IRQControl_GetAPLIC(
+                cptr.bits(),
+                irq,
+                source,
+                trigger,
                 dst.root().bits(),
                 dst.path().bits(),
                 dst.path().depth_for_kernel(),
